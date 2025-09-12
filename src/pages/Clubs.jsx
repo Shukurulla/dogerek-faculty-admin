@@ -19,6 +19,8 @@ import {
   UserOutlined,
   ClockCircleOutlined,
   EnvironmentOutlined,
+  CheckCircleOutlined,
+  TeamOutlined,
 } from "@ant-design/icons";
 import {
   useGetFacultyClubsQuery,

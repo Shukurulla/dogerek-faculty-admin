@@ -8,7 +8,6 @@ import Clubs from "./pages/Clubs";
 import Tutors from "./pages/Tutors";
 import Students from "./pages/Students";
 import Attendance from "./pages/Attendance";
-import Reports from "./pages/Reports";
 import Profile from "./pages/Profile";
 
 function App() {
@@ -25,7 +24,6 @@ function App() {
           <Route path="/tutors" element={<Tutors />} />
           <Route path="/students" element={<Students />} />
           <Route path="/attendance" element={<Attendance />} />
-          <Route path="/reports" element={<Reports />} />
           <Route path="/profile" element={<Profile />} />
         </Route>
       </Route>

@@ -9,6 +9,7 @@ import {
   Tag,
   Avatar,
 } from "antd";
+import React from "react";
 import {
   UserOutlined,
   TeamOutlined,
@@ -17,6 +18,7 @@ import {
   ClockCircleOutlined,
   TrophyOutlined,
   RiseOutlined,
+  CalendarOutlined,
 } from "@ant-design/icons";
 import {
   PieChart,
@@ -77,14 +79,6 @@ export default function Dashboard() {
               valueStyle={{ fontSize: "28px", fontWeight: 600, color }}
             />
           </div>
-          {trend && (
-            <div className="mt-2 flex items-center gap-1">
-              <RiseOutlined className="text-green-500" />
-              <Text className="text-green-500 text-sm">
-                +{trend}% o'tgan oyga nisbatan
-              </Text>
-            </div>
-          )}
         </div>
         <div
           className={`w-16 h-16 rounded-full flex items-center justify-center`}
