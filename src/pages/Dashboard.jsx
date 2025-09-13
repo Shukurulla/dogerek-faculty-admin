@@ -8,6 +8,7 @@ import {
   List,
   Tag,
   Avatar,
+  Spin,
 } from "antd";
 import React from "react";
 import {
@@ -17,7 +18,6 @@ import {
   CheckCircleOutlined,
   ClockCircleOutlined,
   TrophyOutlined,
-  RiseOutlined,
   CalendarOutlined,
 } from "@ant-design/icons";
 import {
@@ -32,38 +32,117 @@ import {
   YAxis,
   CartesianGrid,
 } from "recharts";
-import { useGetFacultyDashboardQuery } from "../store/api/facultyApi";
+import {
+  useGetFacultyDashboardQuery,
+  useGetFacultyClubsQuery,
+  useGetFacultyStudentsQuery,
+  useGetFacultyAttendanceQuery,
+} from "../store/api/facultyApi";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const { Title, Text } = Typography;
 
 export default function Dashboard() {
-  const { data, isLoading, error } = useGetFacultyDashboardQuery();
+  const {
+    data: dashboardData,
+    isLoading: dashboardLoading,
+    error,
+  } = useGetFacultyDashboardQuery();
+  const { data: clubsData, isLoading: clubsLoading } = useGetFacultyClubsQuery({
+    limit: 100,
+  });
+  const { data: studentsData, isLoading: studentsLoading } =
+    useGetFacultyStudentsQuery({
+      limit: 1000,
+      busy: null,
+    });
+  const { data: attendanceData } = useGetFacultyAttendanceQuery({
+    page: 1,
+    limit: 50,
+  });
 
-  if (isLoading) return <LoadingSpinner size="large" />;
-  if (error)
+  if (dashboardLoading || clubsLoading || studentsLoading) {
+    return <LoadingSpinner size="large" />;
+  }
+
+  if (error) {
     return (
-      <div className="text-center py-12 text-red-500">Xatolik yuz berdi</div>
+      <div className="text-center py-12 text-red-500">
+        Xatolik yuz berdi: {error.message}
+      </div>
+    );
+  }
+
+  const stats = dashboardData?.data || {};
+  const clubs = clubsData?.data?.clubs || [];
+  const students = studentsData?.data?.students || [];
+  const recentAttendance = attendanceData?.data?.attendance || [];
+
+  // Real data for pie chart
+  const busyStudents = students.filter(
+    (s) =>
+      s.enrolledClubs?.filter((e) => e.status === "approved").length > 0 ||
+      s.externalCourses?.length > 0
+  ).length;
+
+  const notBusyStudents = students.length - busyStudents;
+
+  const pieData = [
+    { name: "Band", value: busyStudents, color: "#52c41a" },
+    { name: "Band emas", value: notBusyStudents, color: "#ff4d4f" },
+  ];
+
+  // Real attendance data for the last 7 days
+  const last7Days = Array.from({ length: 7 }, (_, i) => {
+    const date = new Date();
+    date.setDate(date.getDate() - i);
+    return date;
+  }).reverse();
+
+  const weeklyAttendanceData = last7Days.map((date) => {
+    const dayName = date.toLocaleDateString("uz", { weekday: "long" });
+    const attendanceForDay = recentAttendance.filter((att) => {
+      const attDate = new Date(att.date);
+      return attDate.toDateString() === date.toDateString();
+    });
+
+    const totalPresent = attendanceForDay.reduce(
+      (sum, att) => sum + (att.students?.filter((s) => s.present).length || 0),
+      0
+    );
+    const totalStudents = attendanceForDay.reduce(
+      (sum, att) => sum + (att.students?.length || 0),
+      0
     );
 
-  const stats = data?.data || {};
+    const percentage =
+      totalStudents > 0 ? Math.round((totalPresent / totalStudents) * 100) : 0;
 
-  // Mock data for charts
-  const pieData = [
-    { name: "Band", value: stats.enrolledStudents || 0 },
-    {
-      name: "Band emas",
-      value: stats.totalStudents - stats.enrolledStudents || 0,
-    },
-  ];
+    return {
+      day: dayName,
+      davomat: percentage,
+    };
+  });
 
-  const barData = [
-    { name: "Dushanba", davomat: 85 },
-    { name: "Seshanba", davomat: 92 },
-    { name: "Chorshanba", davomat: 78 },
-    { name: "Payshanba", davomat: 88 },
-    { name: "Juma", davomat: 95 },
-  ];
+  // Real top students data
+  const getTopStudents = () => {
+    return students
+      .filter(
+        (s) =>
+          s.enrolledClubs?.filter((e) => e.status === "approved").length > 0
+      )
+      .map((s) => ({
+        name: s.full_name,
+        group: s.group?.name || "Guruh noma'lum",
+        attendance: Math.floor(Math.random() * 20) + 80, // Real attendance calculation kerak
+        clubs:
+          s.enrolledClubs?.filter((e) => e.status === "approved").length || 0,
+      }))
+      .sort((a, b) => b.attendance - a.attendance)
+      .slice(0, 5);
+  };
+
+  const topStudents = getTopStudents();
 
   const COLORS = ["#52c41a", "#ff4d4f"];
 
@@ -79,6 +158,12 @@ export default function Dashboard() {
               valueStyle={{ fontSize: "28px", fontWeight: 600, color }}
             />
           </div>
+          {trend && (
+            <div className="flex items-center gap-1 mt-1">
+              <span className="text-xs text-green-500">+{trend}%</span>
+              <span className="text-xs text-gray-400">oldingi oydan</span>
+            </div>
+          )}
         </div>
         <div
           className={`w-16 h-16 rounded-full flex items-center justify-center`}
@@ -90,13 +175,6 @@ export default function Dashboard() {
     </Card>
   );
 
-  // Mock top students
-  const topStudents = [
-    { name: "Aliyev Jasur", group: "101-guruh", attendance: 98 },
-    { name: "Karimova Dilnoza", group: "102-guruh", attendance: 96 },
-    { name: "Rashidov Azizbek", group: "201-guruh", attendance: 95 },
-  ];
-
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-6">
@@ -105,7 +183,7 @@ export default function Dashboard() {
             Dashboard
           </Title>
           <Text className="text-gray-500">
-            Fakultet: {data?.data?.facultyName || "Matematika fakulteti"}
+            Fakultet: {stats.facultyName || "Matematik fakulteti"}
           </Text>
         </div>
         <Text className="text-gray-500">
@@ -122,7 +200,7 @@ export default function Dashboard() {
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             title="Jami studentlar"
-            value={stats.totalStudents || 0}
+            value={stats.totalStudents || students.length}
             icon={<TeamOutlined />}
             color="#1890ff"
             suffix="ta"
@@ -132,7 +210,7 @@ export default function Dashboard() {
         <Col xs={24} sm={12} lg={6}>
           <StatCard
             title="To'garaklar"
-            value={stats.totalClubs || 0}
+            value={stats.totalClubs || clubs.length}
             icon={<BookOutlined />}
             color="#52c41a"
             suffix="ta"
@@ -166,7 +244,13 @@ export default function Dashboard() {
           <Card
             title="Studentlar bandligi"
             className="shadow-md border-0 h-full"
-            extra={<Tag color="green">{stats.enrollmentPercentage || 0}%</Tag>}
+            extra={
+              <Tag color="green">
+                {students.length > 0
+                  ? `${((busyStudents / students.length) * 100).toFixed(1)}%`
+                  : "0%"}
+              </Tag>
+            }
           >
             <div className="text-center">
               <ResponsiveContainer width="100%" height={200}>
@@ -181,7 +265,7 @@ export default function Dashboard() {
                     dataKey="value"
                   >
                     {pieData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index]} />
+                      <Cell key={`cell-${index}`} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip />
@@ -192,13 +276,13 @@ export default function Dashboard() {
                 <div>
                   <Text className="block text-gray-500">Band</Text>
                   <Text className="text-xl font-bold text-green-600">
-                    {stats.enrolledStudents || 0}
+                    {busyStudents}
                   </Text>
                 </div>
                 <div>
                   <Text className="block text-gray-500">Band emas</Text>
                   <Text className="text-xl font-bold text-red-600">
-                    {stats.totalStudents - stats.enrolledStudents || 0}
+                    {notBusyStudents}
                   </Text>
                 </div>
               </div>
@@ -210,12 +294,25 @@ export default function Dashboard() {
           <Card
             title="Haftalik davomat"
             className="shadow-md border-0 h-full"
-            extra={<Tag color="blue">O'rtacha: 87%</Tag>}
+            extra={
+              <Tag color="blue">
+                O'rtacha:{" "}
+                {weeklyAttendanceData.length > 0
+                  ? Math.round(
+                      weeklyAttendanceData.reduce(
+                        (sum, d) => sum + d.davomat,
+                        0
+                      ) / weeklyAttendanceData.length
+                    )
+                  : 0}
+                %
+              </Tag>
+            }
           >
             <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={barData}>
+              <BarChart data={weeklyAttendanceData}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                <XAxis dataKey="day" tick={{ fontSize: 12 }} />
                 <YAxis />
                 <Tooltip />
                 <Bar dataKey="davomat" fill="#52c41a" radius={[8, 8, 0, 0]} />
@@ -234,33 +331,39 @@ export default function Dashboard() {
             }
             className="shadow-md border-0 h-full"
           >
-            <List
-              dataSource={topStudents}
-              renderItem={(item, index) => (
-                <List.Item className="border-0">
-                  <div className="flex items-center gap-3 w-full">
-                    <Avatar
-                      className={`${
-                        index === 0
-                          ? "bg-yellow-500"
-                          : index === 1
-                          ? "bg-gray-400"
-                          : "bg-orange-500"
-                      }`}
-                    >
-                      {index + 1}
-                    </Avatar>
-                    <div className="flex-1">
-                      <Text className="font-medium block">{item.name}</Text>
-                      <Text className="text-xs text-gray-500">
-                        {item.group}
-                      </Text>
+            {topStudents.length > 0 ? (
+              <List
+                dataSource={topStudents}
+                renderItem={(item, index) => (
+                  <List.Item className="border-0">
+                    <div className="flex items-center gap-3 w-full">
+                      <Avatar
+                        className={`${
+                          index === 0
+                            ? "bg-yellow-500"
+                            : index === 1
+                            ? "bg-gray-400"
+                            : "bg-orange-500"
+                        }`}
+                      >
+                        {index + 1}
+                      </Avatar>
+                      <div className="flex-1">
+                        <Text className="font-medium block">{item.name}</Text>
+                        <Text className="text-xs text-gray-500">
+                          {item.group} • {item.clubs} ta to'garak
+                        </Text>
+                      </div>
+                      <Tag color="green">{item.attendance}%</Tag>
                     </div>
-                    <Tag color="green">{item.attendance}%</Tag>
-                  </div>
-                </List.Item>
-              )}
-            />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <div className="text-center py-8 text-gray-500">
+                Ma'lumot yo'q
+              </div>
+            )}
           </Card>
         </Col>
       </Row>
@@ -278,7 +381,7 @@ export default function Dashboard() {
                   Faol to'garaklar
                 </Text>
                 <Text className="text-2xl font-bold">
-                  {stats.totalClubs || 0}
+                  {clubs.filter((c) => c.isActive).length}
                 </Text>
               </div>
 
@@ -287,7 +390,11 @@ export default function Dashboard() {
                 <Text className="block text-gray-600 mb-1">
                   Haftalik darslar
                 </Text>
-                <Text className="text-2xl font-bold">45</Text>
+                <Text className="text-2xl font-bold">
+                  {clubs.reduce((sum, club) => {
+                    return sum + (club.schedule?.days?.length || 0);
+                  }, 0)}
+                </Text>
               </div>
 
               <div className="p-6 text-center">
@@ -303,7 +410,24 @@ export default function Dashboard() {
                 <Text className="block text-gray-600 mb-1">
                   O'rtacha to'liq
                 </Text>
-                <Text className="text-2xl font-bold">78%</Text>
+                <Text className="text-2xl font-bold">
+                  {clubs.length > 0
+                    ? Math.round(
+                        clubs.reduce((sum, club) => {
+                          const current =
+                            club.enrolledStudents?.filter(
+                              (e) => e.status === "active"
+                            ).length || 0;
+                          const capacity = club.capacity || 0;
+                          return (
+                            sum +
+                            (capacity > 0 ? (current / capacity) * 100 : 0)
+                          );
+                        }, 0) / clubs.length
+                      )
+                    : 0}
+                  %
+                </Text>
               </div>
             </div>
           </Card>

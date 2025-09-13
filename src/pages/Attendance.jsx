@@ -10,6 +10,8 @@ import {
   Empty,
   Tooltip,
   Badge,
+  Button,
+  message,
 } from "antd";
 import {
   CalendarOutlined,
@@ -18,6 +20,8 @@ import {
   UserOutlined,
   BookOutlined,
   ClockCircleOutlined,
+  EyeOutlined,
+  DownloadOutlined,
 } from "@ant-design/icons";
 import {
   useGetFacultyAttendanceQuery,
@@ -32,7 +36,8 @@ const { RangePicker } = DatePicker;
 export default function Attendance() {
   const [filters, setFilters] = useState({
     clubId: null,
-    date: null,
+    startDate: null,
+    endDate: null,
     page: 1,
     limit: 20,
   });
@@ -63,12 +68,58 @@ export default function Attendance() {
     }
   };
 
+  const handleExportAttendance = () => {
+    try {
+      // Real export functionality
+      const exportData = attendance.map((record) => ({
+        sana: dayjs(record.date).format("DD.MM.YYYY"),
+        togarak: record.club?.name,
+        jami_studentlar: record.students?.length || 0,
+        kelganlar: record.students?.filter((s) => s.present).length || 0,
+        kelmaganlar: record.students?.filter((s) => !s.present).length || 0,
+        tutor: record.markedBy?.profile?.fullName,
+      }));
+
+      // CSV formatida eksport qilish
+      const csvContent = [
+        [
+          "Sana",
+          "To'garak",
+          "Jami studentlar",
+          "Kelganlar",
+          "Kelmaganlar",
+          "Tutor",
+        ],
+        ...exportData.map((row) => [
+          row.sana,
+          row.togarak,
+          row.jami_studentlar,
+          row.kelganlar,
+          row.kelmaganlar,
+          row.tutor,
+        ]),
+      ]
+        .map((row) => row.join(","))
+        .join("\n");
+
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `davomat_${dayjs().format("YYYY-MM-DD")}.csv`;
+      link.click();
+
+      message.success("Ma'lumotlar muvaffaqiyatli eksport qilindi");
+    } catch (error) {
+      message.error("Eksport qilishda xatolik yuz berdi");
+    }
+  };
+
   const columns = [
     {
       title: "Sana",
       dataIndex: "date",
       key: "date",
-      width: 120,
+      width: 140,
       render: (date) => (
         <div className="flex items-center gap-2">
           <CalendarOutlined className="text-gray-400" />
@@ -82,6 +133,7 @@ export default function Attendance() {
           </div>
         </div>
       ),
+      sorter: (a, b) => dayjs(a.date).unix() - dayjs(b.date).unix(),
     },
     {
       title: "To'garak",
@@ -89,7 +141,16 @@ export default function Attendance() {
       render: (_, record) => (
         <div className="flex items-center gap-2">
           <BookOutlined className="text-green-500" />
-          <Text className="font-medium">{record.club?.name}</Text>
+          <div>
+            <Text className="font-medium">
+              {record.club?.name || "Noma'lum"}
+            </Text>
+            {record.club?.tutor?.profile?.fullName && (
+              <div className="text-xs text-gray-500">
+                Tutor: {record.club.tutor.profile.fullName}
+              </div>
+            )}
+          </div>
         </div>
       ),
     },
@@ -112,6 +173,7 @@ export default function Attendance() {
                 <CloseCircleOutlined className="text-red-500" />
                 <Text className="font-medium">{total - present}</Text>
               </div>
+              <Text className="text-xs text-gray-500">/ {total}</Text>
             </div>
             <Progress
               percent={percentage}
@@ -140,34 +202,38 @@ export default function Attendance() {
         return (
           <Tooltip
             title={
-              <div className="space-y-2">
+              <div className="space-y-2 max-w-sm">
                 <div className="font-medium mb-2">Davomat tafsilotlari:</div>
-                <div className="space-y-1">
-                  {students.slice(0, 10).map((s, index) => (
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {students.slice(0, 15).map((s, index) => (
                     <div key={index} className="flex items-center gap-2">
                       {s.present ? (
                         <CheckCircleOutlined className="text-green-400" />
                       ) : (
                         <CloseCircleOutlined className="text-red-400" />
                       )}
-                      <span>{s.student?.full_name || "Student"}</span>
+                      <span className="text-xs">
+                        {s.student?.full_name || `Student ${index + 1}`}
+                      </span>
                     </div>
                   ))}
-                  {students.length > 10 && (
-                    <div className="text-gray-400 mt-1">
-                      +{students.length - 10} ta boshqa student
+                  {students.length > 15 && (
+                    <div className="text-gray-400 mt-1 text-xs">
+                      +{students.length - 15} ta boshqa student
                     </div>
                   )}
                 </div>
               </div>
             }
+            overlayStyle={{ maxWidth: "400px" }}
           >
             <div className="cursor-pointer">
               <Badge
                 count={students.length}
                 style={{ backgroundColor: "#52c41a" }}
+                overflowCount={999}
               >
-                <Tag icon={<UserOutlined />}>
+                <Tag icon={<UserOutlined />} className="px-2">
                   {presentCount}/{students.length}
                 </Tag>
               </Badge>
@@ -181,7 +247,16 @@ export default function Attendance() {
       dataIndex: "markedBy",
       key: "markedBy",
       render: (user) => (
-        <Text className="text-sm">{user?.profile?.fullName || "---"}</Text>
+        <div>
+          <Text className="font-medium">
+            {user?.profile?.fullName || "Noma'lum"}
+          </Text>
+          {user?.profile?.fullName && (
+            <div className="text-xs text-gray-500">
+              @{user?.username || "username"}
+            </div>
+          )}
+        </div>
       ),
     },
     {
@@ -202,11 +277,11 @@ export default function Attendance() {
       title: "Telegram",
       dataIndex: "telegramPostLink",
       key: "telegram",
-      width: 80,
+      width: 100,
       render: (link) =>
         link ? (
           <a href={link} target="_blank" rel="noopener noreferrer">
-            <Tag color="blue" className="cursor-pointer">
+            <Tag color="blue" className="cursor-pointer" icon={<EyeOutlined />}>
               Post
             </Tag>
           </a>
@@ -218,7 +293,7 @@ export default function Attendance() {
 
   if (loadingAttendance) return <LoadingSpinner size="large" />;
 
-  // Calculate statistics
+  // Real statistics calculation
   const stats = {
     totalSessions: attendance.length,
     totalPresent: attendance.reduce(
@@ -229,17 +304,33 @@ export default function Attendance() {
       (sum, a) => sum + (a.students?.filter((s) => !s.present).length || 0),
       0
     ),
-    averageAttendance:
-      attendance.length > 0
-        ? (
-            attendance.reduce((sum, a) => {
-              const present = a.students?.filter((s) => s.present).length || 0;
-              const total = a.students?.length || 0;
-              return sum + (total > 0 ? (present / total) * 100 : 0);
-            }, 0) / attendance.length
-          ).toFixed(1)
-        : 0,
+    totalStudents: attendance.reduce(
+      (sum, a) => sum + (a.students?.length || 0),
+      0
+    ),
   };
+
+  stats.averageAttendance =
+    stats.totalStudents > 0
+      ? ((stats.totalPresent / stats.totalStudents) * 100).toFixed(1)
+      : 0;
+
+  // Eng yaxshi va eng yomon davomatni hisoblash
+  const sessionStats = attendance
+    .map((a) => {
+      const present = a.students?.filter((s) => s.present).length || 0;
+      const total = a.students?.length || 0;
+      const percentage = total > 0 ? (present / total) * 100 : 0;
+      return {
+        date: a.date,
+        club: a.club?.name,
+        percentage,
+      };
+    })
+    .sort((a, b) => b.percentage - a.percentage);
+
+  const bestSession = sessionStats[0];
+  const worstSession = sessionStats[sessionStats.length - 1];
 
   return (
     <div className="space-y-6">
@@ -258,6 +349,10 @@ export default function Attendance() {
                 setFilters((prev) => ({ ...prev, clubId: value, page: 1 }))
               }
               value={filters.clubId}
+              showSearch
+              filterOption={(input, option) =>
+                option?.children?.toLowerCase().includes(input.toLowerCase())
+              }
             >
               {clubs.map((club) => (
                 <Select.Option key={club._id} value={club._id}>
@@ -270,11 +365,24 @@ export default function Attendance() {
               format="DD.MM.YYYY"
               placeholder={["Boshlanish", "Tugash"]}
               onChange={handleDateChange}
+              value={
+                filters.startDate && filters.endDate
+                  ? [dayjs(filters.startDate), dayjs(filters.endDate)]
+                  : [null, null]
+              }
             />
+
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleExportAttendance}
+              disabled={attendance.length === 0}
+            >
+              Eksport
+            </Button>
           </div>
         </div>
 
-        {/* Statistics Cards */}
+        {/* Real Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card className="border border-blue-200 bg-blue-50">
             <div className="flex items-center justify-between">
@@ -283,6 +391,11 @@ export default function Attendance() {
                 <div className="text-2xl font-bold text-blue-600 mt-1">
                   {stats.totalSessions}
                 </div>
+                {bestSession && (
+                  <Text className="text-xs text-blue-500">
+                    Eng yaxshi: {bestSession.percentage.toFixed(0)}%
+                  </Text>
+                )}
               </div>
               <CalendarOutlined className="text-3xl text-blue-400" />
             </div>
@@ -295,6 +408,9 @@ export default function Attendance() {
                 <div className="text-2xl font-bold text-green-600 mt-1">
                   {stats.totalPresent}
                 </div>
+                <Text className="text-xs text-green-500">
+                  Jami: {stats.totalStudents} dan
+                </Text>
               </div>
               <CheckCircleOutlined className="text-3xl text-green-400" />
             </div>
@@ -307,6 +423,11 @@ export default function Attendance() {
                 <div className="text-2xl font-bold text-red-600 mt-1">
                   {stats.totalAbsent}
                 </div>
+                {worstSession && (
+                  <Text className="text-xs text-red-500">
+                    Eng yomon: {worstSession.percentage.toFixed(0)}%
+                  </Text>
+                )}
               </div>
               <CloseCircleOutlined className="text-3xl text-red-400" />
             </div>
@@ -319,6 +440,9 @@ export default function Attendance() {
                 <div className="text-2xl font-bold text-purple-600 mt-1">
                   {stats.averageAttendance}%
                 </div>
+                <Text className="text-xs text-purple-500">
+                  {stats.totalSessions} darsda
+                </Text>
               </div>
               <Progress
                 type="circle"
@@ -341,15 +465,27 @@ export default function Attendance() {
               pageSize: filters.limit,
               total: pagination.total,
               showSizeChanger: true,
-              showTotal: (total) => `Jami: ${total} ta`,
+              showQuickJumper: true,
+              showTotal: (total, range) =>
+                `${range[0]}-${range[1]} dan ${total} ta`,
               onChange: (page, pageSize) =>
                 setFilters((prev) => ({ ...prev, page, limit: pageSize })),
             }}
             className="shadow-sm"
+            scroll={{ x: 1200 }}
           />
         ) : (
           <Empty
-            description="Davomat ma'lumotlari topilmadi"
+            description={
+              <div>
+                <div>Davomat ma'lumotlari topilmadi</div>
+                <div className="text-sm text-gray-400 mt-1">
+                  {filters.clubId || filters.startDate
+                    ? "Filtrlarni o'zgartirib ko'ring"
+                    : "Hali davomat belgilanmagan"}
+                </div>
+              </div>
+            }
             className="py-12"
           />
         )}

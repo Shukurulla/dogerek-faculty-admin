@@ -10,6 +10,7 @@ import {
   Progress,
   Popconfirm,
   message,
+  Empty,
 } from "antd";
 import {
   PlusOutlined,
@@ -37,7 +38,7 @@ export default function Clubs() {
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(10);
 
-  const { data, isLoading } = useGetFacultyClubsQuery({ page, limit });
+  const { data, isLoading, error } = useGetFacultyClubsQuery({ page, limit });
   const [deleteClub] = useDeleteClubMutation();
 
   const clubs = data?.data?.clubs || [];
@@ -71,7 +72,7 @@ export default function Clubs() {
         message.success("To'garak o'chirildi");
       }
     } catch (error) {
-      message.error("Xatolik yuz berdi");
+      message.error(error.data?.message || "Xatolik yuz berdi");
     }
   };
 
@@ -98,7 +99,9 @@ export default function Clubs() {
         <div className="flex items-center gap-2">
           <UserOutlined className="text-gray-400" />
           <div>
-            <div className="font-medium">{record.tutor?.profile?.fullName}</div>
+            <div className="font-medium">
+              {record.tutor?.profile?.fullName || "Belgilanmagan"}
+            </div>
             {record.tutor?.profile?.phone && (
               <Text className="text-xs text-gray-500">
                 {record.tutor.profile.phone
@@ -113,34 +116,40 @@ export default function Clubs() {
     {
       title: "Jadval",
       key: "schedule",
-      render: (_, record) => (
-        <div className="space-y-1">
-          <div className="flex items-center gap-1">
-            <ClockCircleOutlined className="text-gray-400" />
-            <Text className="text-sm">
-              {record.schedule?.time?.start} - {record.schedule?.time?.end}
-            </Text>
+      render: (_, record) => {
+        if (!record.schedule) {
+          return <Text className="text-gray-400">Belgilanmagan</Text>;
+        }
+
+        return (
+          <div className="space-y-1">
+            <div className="flex items-center gap-1">
+              <ClockCircleOutlined className="text-gray-400" />
+              <Text className="text-sm">
+                {record.schedule?.time?.start} - {record.schedule?.time?.end}
+              </Text>
+            </div>
+            <div className="flex gap-1">
+              {record.schedule?.days?.map((day) => (
+                <Tag key={day} color="green" className="m-0">
+                  {weekDays[day]}
+                </Tag>
+              ))}
+            </div>
+            <Tag
+              color={
+                record.schedule?.weekType === "odd"
+                  ? "orange"
+                  : record.schedule?.weekType === "even"
+                  ? "purple"
+                  : "green"
+              }
+            >
+              {weekType[record.schedule?.weekType]}
+            </Tag>
           </div>
-          <div className="flex gap-1">
-            {record.schedule?.days?.map((day) => (
-              <Tag key={day} color="green" className="m-0">
-                {weekDays[day]}
-              </Tag>
-            ))}
-          </div>
-          <Tag
-            color={
-              record.schedule?.weekType === "odd"
-                ? "orange"
-                : record.schedule?.weekType === "even"
-                ? "purple"
-                : "green"
-            }
-          >
-            {weekType[record.schedule?.weekType]}
-          </Tag>
-        </div>
-      ),
+        );
+      },
     },
     {
       title: "Joylashuv",
@@ -157,9 +166,7 @@ export default function Clubs() {
       title: "Studentlar",
       key: "students",
       render: (_, record) => {
-        const current =
-          record.enrolledStudents?.filter((e) => e.status === "active")
-            .length || 0;
+        const current = record.currentStudents || 0;
         const capacity = record.capacity || 0;
         const percentage = capacity > 0 ? (current / capacity) * 100 : 0;
 
@@ -226,6 +233,24 @@ export default function Clubs() {
 
   if (isLoading) return <LoadingSpinner size="large" />;
 
+  if (error) {
+    return (
+      <div className="text-center py-12">
+        <Text className="text-red-500">
+          Ma'lumotlarni yuklashda xatolik yuz berdi
+        </Text>
+      </div>
+    );
+  }
+
+  // Real statistics from data
+  const totalClubs = pagination.total || 0;
+  const activeClubs = clubs.filter((c) => c.isActive).length;
+  const totalStudents = clubs.reduce(
+    (sum, c) => sum + (c.currentStudents || 0),
+    0
+  );
+
   return (
     <div className="space-y-6">
       <Card className="border-0 shadow-md">
@@ -254,7 +279,7 @@ export default function Clubs() {
               <div>
                 <Text className="text-gray-600">Jami to'garaklar</Text>
                 <div className="text-2xl font-bold text-green-600 mt-1">
-                  {pagination.total || 0}
+                  {totalClubs}
                 </div>
               </div>
               <BookOutlined className="text-3xl text-green-400" />
@@ -266,7 +291,7 @@ export default function Clubs() {
               <div>
                 <Text className="text-gray-600">Faol to'garaklar</Text>
                 <div className="text-2xl font-bold text-blue-600 mt-1">
-                  {clubs.filter((c) => c.isActive).length}
+                  {activeClubs}
                 </div>
               </div>
               <CheckCircleOutlined className="text-3xl text-blue-400" />
@@ -278,13 +303,7 @@ export default function Clubs() {
               <div>
                 <Text className="text-gray-600">Jami o'quvchilar</Text>
                 <div className="text-2xl font-bold text-purple-600 mt-1">
-                  {clubs.reduce(
-                    (sum, c) =>
-                      sum +
-                      (c.enrolledStudents?.filter((e) => e.status === "active")
-                        .length || 0),
-                    0
-                  )}
+                  {totalStudents}
                 </div>
               </div>
               <TeamOutlined className="text-3xl text-purple-400" />
@@ -292,23 +311,45 @@ export default function Clubs() {
           </Card>
         </div>
 
-        <Table
-          columns={columns}
-          dataSource={clubs}
-          rowKey="_id"
-          pagination={{
-            current: page,
-            pageSize: limit,
-            total: pagination.total,
-            showSizeChanger: true,
-            showTotal: (total) => `Jami: ${total} ta`,
-            onChange: (page, pageSize) => {
-              setPage(page);
-              setLimit(pageSize);
-            },
-          }}
-          className="shadow-sm"
-        />
+        {clubs.length > 0 ? (
+          <Table
+            columns={columns}
+            dataSource={clubs}
+            rowKey="_id"
+            pagination={{
+              current: page,
+              pageSize: limit,
+              total: pagination.total,
+              showSizeChanger: true,
+              showTotal: (total) => `Jami: ${total} ta`,
+              onChange: (page, pageSize) => {
+                setPage(page);
+                setLimit(pageSize);
+              },
+            }}
+            className="shadow-sm"
+          />
+        ) : (
+          <div className="text-center py-12">
+            <Empty
+              image={Empty.PRESENTED_IMAGE_SIMPLE}
+              description="Hozircha to'garaklar yo'q"
+              style={{ marginBottom: 16 }}
+            >
+              <Button
+                type="primary"
+                icon={<PlusOutlined />}
+                onClick={() => {
+                  setEditingClub(null);
+                  setIsModalOpen(true);
+                }}
+                className="bg-gradient-to-r from-green-500 to-emerald-600 border-0"
+              >
+                Birinchi to'garakni yarating
+              </Button>
+            </Empty>
+          </div>
+        )}
       </Card>
 
       <ClubModal

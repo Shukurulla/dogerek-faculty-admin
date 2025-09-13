@@ -8,7 +8,7 @@ export const facultyApi = baseApi.injectEndpoints({
       providesTags: ["Dashboard"],
     }),
 
-    // Clubs
+    // Clubs - olib tashlangan fakultet filtri
     getFacultyClubs: builder.query({
       query: (params) => ({
         url: "/faculty/clubs",
@@ -75,13 +75,32 @@ export const facultyApi = baseApi.injectEndpoints({
       invalidatesTags: ["Tutor", "Dashboard"],
     }),
 
-    // Students
+    // Students - barcha studentlar (filtrlash orqali fakultet bo'yicha)
     getFacultyStudents: builder.query({
       query: (params) => ({
         url: "/faculty/students",
         params,
       }),
       providesTags: ["Student"],
+    }),
+
+    // Club enrollments - barcha fakultetlardan
+    getClubEnrollments: builder.query({
+      query: (params) => ({
+        url: "/faculty/enrollments",
+        params,
+      }),
+      providesTags: ["Enrollment"],
+    }),
+
+    // Process enrollment
+    processEnrollment: builder.mutation({
+      query: ({ id, action, rejectionReason }) => ({
+        url: `/faculty/enrollment/${id}/process`,
+        method: "POST",
+        body: { action, rejectionReason },
+      }),
+      invalidatesTags: ["Enrollment", "Student", "Club"],
     }),
 
     // Attendance
@@ -91,6 +110,21 @@ export const facultyApi = baseApi.injectEndpoints({
         params,
       }),
       providesTags: ["Attendance"],
+    }),
+
+    // Get all faculties for club creation
+    getAllFaculties: builder.query({
+      query: () => "/faculties",
+      providesTags: ["Faculty"],
+    }),
+
+    // Get all groups
+    getAllGroups: builder.query({
+      query: (facultyId) => ({
+        url: "/groups",
+        params: facultyId ? { facultyId } : {},
+      }),
+      providesTags: ["Group"],
     }),
   }),
 });
@@ -106,5 +140,9 @@ export const {
   useUpdateTutorMutation,
   useDeleteTutorMutation,
   useGetFacultyStudentsQuery,
+  useGetClubEnrollmentsQuery,
+  useProcessEnrollmentMutation,
   useGetFacultyAttendanceQuery,
+  useGetAllFacultiesQuery,
+  useGetAllGroupsQuery,
 } = facultyApi;

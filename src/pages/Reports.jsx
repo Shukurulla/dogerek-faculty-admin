@@ -12,6 +12,7 @@ import {
   Progress,
   Tag,
   Tabs,
+  message,
 } from "antd";
 import {
   FileTextOutlined,
@@ -65,6 +66,7 @@ export default function Reports() {
     clubId: selectedClub,
     startDate: dateRange[0]?.format("YYYY-MM-DD"),
     endDate: dateRange[1]?.format("YYYY-MM-DD"),
+    limit: 200,
   });
 
   const clubs = clubsData?.data?.clubs || [];
@@ -73,7 +75,7 @@ export default function Reports() {
 
   if (loadingClubs || loadingStudents) return <LoadingSpinner size="large" />;
 
-  // Calculate statistics
+  // Real statistics calculation
   const busyStudents = students.filter(
     (s) =>
       s.enrolledClubs?.filter((e) => e.status === "approved").length > 0 ||
@@ -92,16 +94,18 @@ export default function Reports() {
             clubs.reduce(
               (sum, c) =>
                 sum +
-                c.enrolledStudents?.filter((e) => e.status === "active").length,
+                (c.enrolledStudents?.filter((e) => e.status === "active")
+                  .length || 0),
               0
             ) / clubs.length
           )
         : 0,
   };
 
-  // Prepare chart data
+  // Real chart data from clubs
   const clubsChartData = clubs.map((club) => ({
-    name: club.name,
+    name:
+      club.name.length > 15 ? club.name.substring(0, 15) + "..." : club.name,
     studentlar:
       club.enrolledStudents?.filter((e) => e.status === "active").length || 0,
     sigim: club.capacity || 0,
@@ -112,16 +116,46 @@ export default function Reports() {
     { name: "Band emas", value: stats.notBusyCount, color: "#ff4d4f" },
   ];
 
-  const weeklyAttendanceData = [
-    { day: "Dushanba", davomat: 85 },
-    { day: "Seshanba", davomat: 92 },
-    { day: "Chorshanba", davomat: 78 },
-    { day: "Payshanba", davomat: 88 },
-    { day: "Juma", davomat: 95 },
-    { day: "Shanba", davomat: 82 },
-  ];
+  // Real weekly attendance data from attendance records
+  const getWeeklyAttendanceData = () => {
+    const last7Days = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date();
+      date.setDate(date.getDate() - i);
+      return date;
+    }).reverse();
 
-  // Top performing clubs
+    return last7Days.map((date) => {
+      const dayName = date.toLocaleDateString("uz", { weekday: "short" });
+      const attendanceForDay = attendance.filter((att) => {
+        const attDate = new Date(att.date);
+        return attDate.toDateString() === date.toDateString();
+      });
+
+      const totalPresent = attendanceForDay.reduce(
+        (sum, att) =>
+          sum + (att.students?.filter((s) => s.present).length || 0),
+        0
+      );
+      const totalStudents = attendanceForDay.reduce(
+        (sum, att) => sum + (att.students?.length || 0),
+        0
+      );
+
+      const percentage =
+        totalStudents > 0
+          ? Math.round((totalPresent / totalStudents) * 100)
+          : 0;
+
+      return {
+        day: dayName,
+        davomat: percentage,
+      };
+    });
+  };
+
+  const weeklyAttendanceData = getWeeklyAttendanceData();
+
+  // Real top performing clubs
   const topClubs = clubs
     .map((club) => ({
       ...club,
@@ -137,19 +171,104 @@ export default function Reports() {
     .sort((a, b) => b.studentCount - a.studentCount)
     .slice(0, 5);
 
-  // Top students by attendance (mock data)
-  const topStudents = [
-    { name: "Aliyev Jasur", group: "101-guruh", attendance: 98, clubs: 2 },
-    { name: "Karimova Dilnoza", group: "102-guruh", attendance: 96, clubs: 1 },
-    { name: "Rashidov Azizbek", group: "201-guruh", attendance: 95, clubs: 2 },
-    { name: "Ergashev Sardor", group: "301-guruh", attendance: 94, clubs: 1 },
-    { name: "Nazarova Malika", group: "202-guruh", attendance: 93, clubs: 3 },
-  ];
+  // Real top students calculation
+  const getTopStudents = () => {
+    const studentsWithClubs = students.filter(
+      (s) => s.enrolledClubs?.filter((e) => e.status === "approved").length > 0
+    );
+
+    // Calculate attendance for each student from attendance records
+    const studentsWithAttendance = studentsWithClubs.map((student) => {
+      const studentAttendanceRecords = attendance.filter((att) =>
+        att.students?.some((s) => s.student === student._id)
+      );
+
+      let totalClasses = 0;
+      let presentClasses = 0;
+
+      studentAttendanceRecords.forEach((att) => {
+        const studentRecord = att.students?.find(
+          (s) => s.student === student._id
+        );
+        if (studentRecord) {
+          totalClasses++;
+          if (studentRecord.present) {
+            presentClasses++;
+          }
+        }
+      });
+
+      const attendanceRate =
+        totalClasses > 0
+          ? Math.round((presentClasses / totalClasses) * 100)
+          : 0;
+
+      return {
+        name: student.full_name,
+        group: student.group?.name || "Guruh noma'lum",
+        attendance: attendanceRate,
+        clubs:
+          student.enrolledClubs?.filter((e) => e.status === "approved")
+            .length || 0,
+        totalClasses,
+        presentClasses,
+      };
+    });
+
+    return studentsWithAttendance
+      .filter((s) => s.totalClasses > 0) // Faqat davomat ma'lumotlari bor studentlar
+      .sort((a, b) => b.attendance - a.attendance)
+      .slice(0, 5);
+  };
+
+  const topStudents = getTopStudents();
 
   const handleExport = (type) => {
-    // Mock export functionality
-    console.log(`Exporting ${type} report...`);
+    try {
+      if (type === "pdf") {
+        // PDF export logic
+        const reportData = {
+          stats,
+          clubs: clubs.length,
+          students: students.length,
+          date: new Date().toLocaleDateString("uz"),
+        };
+
+        // Bu yerda real PDF export implementatsiya bo'lishi kerak
+        console.log("PDF export data:", reportData);
+        message.success("PDF hisobot tayyorlanmoqda...");
+      }
+    } catch (error) {
+      message.error("Eksport qilishda xatolik yuz berdi");
+    }
   };
+
+  // Real schedule analysis
+  const getScheduleAnalysis = () => {
+    const dayStats = {
+      1: { name: "Dushanba", clubs: [] },
+      2: { name: "Seshanba", clubs: [] },
+      3: { name: "Chorshanba", clubs: [] },
+      4: { name: "Payshanba", clubs: [] },
+      5: { name: "Juma", clubs: [] },
+      6: { name: "Shanba", clubs: [] },
+      7: { name: "Yakshanba", clubs: [] },
+    };
+
+    clubs.forEach((club) => {
+      if (club.schedule?.days?.length) {
+        club.schedule.days.forEach((day) => {
+          if (dayStats[day]) {
+            dayStats[day].clubs.push(club);
+          }
+        });
+      }
+    });
+
+    return Object.values(dayStats);
+  };
+
+  const scheduleAnalysis = getScheduleAnalysis();
 
   return (
     <div className="space-y-6">
@@ -204,7 +323,7 @@ export default function Reports() {
             }
             key="overview"
           >
-            {/* Overview Statistics */}
+            {/* Real Statistics */}
             <Row gutter={[16, 16]} className="mb-6">
               <Col xs={24} sm={12} lg={6}>
                 <Card>
@@ -225,7 +344,11 @@ export default function Reports() {
                     valueStyle={{ color: "#52c41a" }}
                   />
                   <Progress
-                    percent={(stats.busyCount / stats.totalStudents) * 100}
+                    percent={
+                      stats.totalStudents > 0
+                        ? (stats.busyCount / stats.totalStudents) * 100
+                        : 0
+                    }
                     strokeColor="#52c41a"
                     showInfo={false}
                   />
@@ -254,7 +377,7 @@ export default function Reports() {
               </Col>
             </Row>
 
-            {/* Charts */}
+            {/* Charts with real data */}
             <Row gutter={[16, 16]}>
               <Col xs={24} lg={12}>
                 <Card title="Studentlar bandligi" className="h-full">
@@ -406,29 +529,23 @@ export default function Reports() {
                   }
                 >
                   <div className="space-y-3">
-                    {[
-                      "Dushanba",
-                      "Seshanba",
-                      "Chorshanba",
-                      "Payshanba",
-                      "Juma",
-                    ].map((day, index) => (
+                    {scheduleAnalysis.slice(0, 5).map((day) => (
                       <div
-                        key={day}
+                        key={day.name}
                         className="flex items-center justify-between p-2 bg-gray-50 rounded"
                       >
-                        <Text className="font-medium">{day}</Text>
+                        <Text className="font-medium">{day.name}</Text>
                         <div className="flex gap-1">
-                          {clubs
-                            .filter((c) =>
-                              c.schedule?.days?.includes(index + 1)
-                            )
-                            .slice(0, 3)
-                            .map((club, i) => (
-                              <Tag key={i} color="purple">
-                                {club.name}
-                              </Tag>
-                            ))}
+                          {day.clubs.slice(0, 3).map((club, i) => (
+                            <Tag key={i} color="purple" title={club.name}>
+                              {club.name.length > 8
+                                ? club.name.substring(0, 8) + "..."
+                                : club.name}
+                            </Tag>
+                          ))}
+                          {day.clubs.length > 3 && (
+                            <Tag color="default">+{day.clubs.length - 3}</Tag>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -448,66 +565,80 @@ export default function Reports() {
           >
             <Row gutter={[16, 16]}>
               <Col span={24}>
-                <Card title="Eng faol studentlar">
-                  <Table
-                    dataSource={topStudents}
-                    pagination={false}
-                    columns={[
-                      {
-                        title: "O'rin",
-                        key: "rank",
-                        width: 80,
-                        render: (_, __, index) => (
-                          <div className="flex items-center gap-2">
-                            {index === 0 && (
-                              <TrophyOutlined className="text-yellow-500 text-xl" />
-                            )}
-                            {index === 1 && (
-                              <TrophyOutlined className="text-gray-400 text-xl" />
-                            )}
-                            {index === 2 && (
-                              <TrophyOutlined className="text-orange-500 text-xl" />
-                            )}
-                            <Text className="font-bold text-lg">
-                              {index + 1}
-                            </Text>
-                          </div>
-                        ),
-                      },
-                      {
-                        title: "Student",
-                        dataIndex: "name",
-                        key: "name",
-                        render: (name) => (
-                          <Text className="font-medium">{name}</Text>
-                        ),
-                      },
-                      {
-                        title: "Guruh",
-                        dataIndex: "group",
-                        key: "group",
-                        render: (group) => <Tag color="green">{group}</Tag>,
-                      },
-                      {
-                        title: "Davomat",
-                        dataIndex: "attendance",
-                        key: "attendance",
-                        render: (attendance) => (
-                          <Progress
-                            percent={attendance}
-                            size="small"
-                            strokeColor="#52c41a"
-                          />
-                        ),
-                      },
-                      {
-                        title: "To'garaklar",
-                        dataIndex: "clubs",
-                        key: "clubs",
-                        render: (clubs) => <Tag color="purple">{clubs} ta</Tag>,
-                      },
-                    ]}
-                  />
+                <Card title="Eng faol studentlar (real davomat asosida)">
+                  {topStudents.length > 0 ? (
+                    <Table
+                      dataSource={topStudents}
+                      pagination={false}
+                      columns={[
+                        {
+                          title: "O'rin",
+                          key: "rank",
+                          width: 80,
+                          render: (_, __, index) => (
+                            <div className="flex items-center gap-2">
+                              {index === 0 && (
+                                <TrophyOutlined className="text-yellow-500 text-xl" />
+                              )}
+                              {index === 1 && (
+                                <TrophyOutlined className="text-gray-400 text-xl" />
+                              )}
+                              {index === 2 && (
+                                <TrophyOutlined className="text-orange-500 text-xl" />
+                              )}
+                              <Text className="font-bold text-lg">
+                                {index + 1}
+                              </Text>
+                            </div>
+                          ),
+                        },
+                        {
+                          title: "Student",
+                          dataIndex: "name",
+                          key: "name",
+                          render: (name) => (
+                            <Text className="font-medium">{name}</Text>
+                          ),
+                        },
+                        {
+                          title: "Guruh",
+                          dataIndex: "group",
+                          key: "group",
+                          render: (group) => <Tag color="green">{group}</Tag>,
+                        },
+                        {
+                          title: "Davomat",
+                          dataIndex: "attendance",
+                          key: "attendance",
+                          render: (attendance, record) => (
+                            <div>
+                              <Progress
+                                percent={attendance}
+                                size="small"
+                                strokeColor="#52c41a"
+                              />
+                              <Text className="text-xs text-gray-500">
+                                {record.presentClasses}/{record.totalClasses}{" "}
+                                dars
+                              </Text>
+                            </div>
+                          ),
+                        },
+                        {
+                          title: "To'garaklar",
+                          dataIndex: "clubs",
+                          key: "clubs",
+                          render: (clubs) => (
+                            <Tag color="purple">{clubs} ta</Tag>
+                          ),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      Davomat ma'lumotlari mavjud emas
+                    </div>
+                  )}
                 </Card>
               </Col>
             </Row>

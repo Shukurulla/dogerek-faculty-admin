@@ -9,6 +9,8 @@ import {
   Typography,
   Tabs,
   Badge,
+  Switch,
+  Tooltip,
 } from "antd";
 import {
   SearchOutlined,
@@ -17,8 +19,12 @@ import {
   GlobalOutlined,
   WarningOutlined,
   TeamOutlined,
+  FilterOutlined,
 } from "@ant-design/icons";
-import { useGetFacultyStudentsQuery } from "../store/api/facultyApi";
+import {
+  useGetFacultyStudentsQuery,
+  useGetAllFacultiesQuery,
+} from "../store/api/facultyApi";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const { Title, Text } = Typography;
@@ -32,10 +38,14 @@ export default function Students() {
     page: 1,
     limit: 10,
   });
+  const [showAllFaculties, setShowAllFaculties] = useState(false);
 
   const { data, isLoading } = useGetFacultyStudentsQuery(filters);
+  const { data: facultiesData } = useGetAllFacultiesQuery();
+
   const students = data?.data?.students || [];
   const pagination = data?.data?.pagination || {};
+  const faculties = facultiesData?.data || [];
 
   const columns = [
     {
@@ -61,6 +71,16 @@ export default function Students() {
       ),
     },
     {
+      title: "Fakultet",
+      dataIndex: ["department", "name"],
+      key: "faculty",
+      render: (text) => (
+        <Tag color="blue" className="max-w-32 truncate">
+          {text}
+        </Tag>
+      ),
+    },
+    {
       title: "Guruh",
       dataIndex: ["group", "name"],
       key: "group",
@@ -83,11 +103,24 @@ export default function Students() {
         }
         return (
           <div className="flex flex-wrap gap-1">
-            {activeClubs.map((club, index) => (
+            {activeClubs.slice(0, 2).map((club, index) => (
               <Tag key={index} color="purple" icon={<BookOutlined />}>
                 {club.club?.name || "To'garak"}
               </Tag>
             ))}
+            {activeClubs.length > 2 && (
+              <Tooltip
+                title={
+                  <div>
+                    {activeClubs.slice(2).map((club, index) => (
+                      <div key={index}>{club.club?.name}</div>
+                    ))}
+                  </div>
+                }
+              >
+                <Tag color="purple">+{activeClubs.length - 2}</Tag>
+              </Tooltip>
+            )}
           </div>
         );
       },
@@ -124,7 +157,7 @@ export default function Students() {
     },
   ];
 
-  // Mock groups
+  // Mock groups for now - keyinroq real API dan olinadi
   const groups = [
     { id: 1, name: "101-guruh" },
     { id: 2, name: "102-guruh" },
@@ -136,6 +169,14 @@ export default function Students() {
     setFilters((prev) => ({
       ...prev,
       busy: key === "all" ? null : key,
+      page: 1,
+    }));
+  };
+
+  const handleSearch = (value) => {
+    setFilters((prev) => ({
+      ...prev,
+      search: value,
       page: 1,
     }));
   };
@@ -156,10 +197,28 @@ export default function Students() {
       <Card className="border-0 shadow-md">
         <div className="flex justify-between items-center mb-6">
           <Title level={3} className="!mb-0">
-            Fakultet studentlari
+            Studentlar
           </Title>
 
-          <div className="flex gap-3">
+          <div className="flex gap-3 items-center">
+            <div className="flex items-center gap-2">
+              <FilterOutlined className="text-gray-400" />
+              <Text className="text-sm">Barcha fakultetlar:</Text>
+              <Switch
+                checked={showAllFaculties}
+                onChange={(checked) => {
+                  setShowAllFaculties(checked);
+                  if (checked) {
+                    // Barcha fakultetlardan qidirish uchun search maydonini faollashtirish
+                    setFilters((prev) => ({ ...prev, search: "" }));
+                  } else {
+                    // Faqat o'z fakulteti studentlarini ko'rsatish
+                    setFilters((prev) => ({ ...prev, search: "" }));
+                  }
+                }}
+              />
+            </div>
+
             <Select
               placeholder="Guruh"
               style={{ width: 150 }}
@@ -176,12 +235,15 @@ export default function Students() {
             </Select>
 
             <Input
-              placeholder="Qidirish..."
-              prefix={<SearchOutlined />}
-              style={{ width: 200 }}
-              onChange={(e) =>
-                setFilters((prev) => ({ ...prev, search: e.target.value }))
+              placeholder={
+                showAllFaculties
+                  ? "Barcha fakultetlardan qidirish..."
+                  : "Qidirish..."
               }
+              prefix={<SearchOutlined />}
+              style={{ width: 250 }}
+              onChange={(e) => handleSearch(e.target.value)}
+              value={filters.search}
             />
           </div>
         </div>
