@@ -1,3 +1,4 @@
+// src/components/ClubModal.jsx - Hafta turini olib tashlash
 import { useEffect } from "react";
 import {
   Modal,
@@ -24,14 +25,12 @@ export default function ClubModal({ open, onClose, editingClub }) {
   const [createClub, { isLoading: creating }] = useCreateClubMutation();
   const [updateClub, { isLoading: updating }] = useUpdateClubMutation();
 
-  // Real tutorlarni olish
   const { data: tutorsData, isLoading: tutorsLoading } =
     useGetFacultyTutorsQuery();
   const tutors = tutorsData?.data || [];
 
   useEffect(() => {
     if (editingClub) {
-      // Real club ma'lumotlarini formaga yuklaymiz
       const scheduleTime = editingClub.schedule?.time;
       form.setFieldsValue({
         name: editingClub.name,
@@ -41,7 +40,7 @@ export default function ClubModal({ open, onClose, editingClub }) {
         capacity: editingClub.capacity,
         telegramChannelLink: editingClub.telegramChannelLink,
         days: editingClub.schedule?.days || [],
-        weekType: editingClub.schedule?.weekType || "both",
+        // OLIB TASHLANDI: weekType
         time:
           scheduleTime?.start && scheduleTime?.end
             ? [
@@ -57,7 +56,6 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
   const handleSubmit = async (values) => {
     try {
-      // Validate time
       if (!values.time || values.time.length !== 2) {
         message.error("Vaqt oralig'ini to'liq kiriting");
         return;
@@ -67,7 +65,8 @@ export default function ClubModal({ open, onClose, editingClub }) {
         ...values,
         schedule: {
           days: values.days,
-          weekType: values.weekType,
+          // OLIB TASHLANDI: weekType - default "both" qilib qo'yamiz
+          weekType: "both",
           time: {
             start: values.time[0].format("HH:mm"),
             end: values.time[1].format("HH:mm"),
@@ -75,12 +74,9 @@ export default function ClubModal({ open, onClose, editingClub }) {
         },
       };
 
-      // Remove fields that are now in schedule
       delete formattedValues.days;
-      delete formattedValues.weekType;
       delete formattedValues.time;
 
-      // Validate telegram link format
       if (
         formattedValues.telegramChannelLink &&
         !formattedValues.telegramChannelLink.startsWith("https://t.me/")
@@ -123,13 +119,8 @@ export default function ClubModal({ open, onClose, editingClub }) {
     { value: 7, label: "Yakshanba" },
   ];
 
-  const weekTypes = [
-    { value: "odd", label: "Toq haftalar" },
-    { value: "even", label: "Juft haftalar" },
-    { value: "both", label: "Har hafta" },
-  ];
+  // OLIB TASHLANDI: weekTypes array
 
-  // Active tutorlarni filterlash
   const activeTutors = tutors.filter((t) => t.isActive);
 
   return (
@@ -178,11 +169,11 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
         <Form.Item
           name="tutorId"
-          label="Tutor"
-          rules={[{ required: true, message: "Tutor tanlanishi shart!" }]}
+          label="O'qituvchi"
+          rules={[{ required: true, message: "O'qituvchi tanlanishi shart!" }]}
         >
           <Select
-            placeholder="Tutorni tanlang"
+            placeholder="O'qituvchini tanlang"
             size="large"
             showSearch
             loading={tutorsLoading}
@@ -197,7 +188,7 @@ export default function ClubModal({ open, onClose, editingClub }) {
               tutorsLoading
                 ? "Yuklanmoqda..."
                 : activeTutors.length === 0
-                ? "Faol tutorlar yo'q"
+                ? "Faol o'qituvchilar yo'q"
                 : "Topilmadi"
             }
           />
@@ -205,7 +196,7 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
         <Form.Item
           name="days"
-          label="Kunlar"
+          label="Dars kunlari"
           rules={[
             { required: true, message: "Kunlar tanlanishi shart!" },
             {
@@ -224,21 +215,11 @@ export default function ClubModal({ open, onClose, editingClub }) {
           />
         </Form.Item>
 
-        <Form.Item
-          name="weekType"
-          label="Hafta turi"
-          rules={[{ required: true, message: "Hafta turi tanlanishi shart!" }]}
-        >
-          <Select
-            placeholder="Hafta turini tanlang"
-            size="large"
-            options={weekTypes}
-          />
-        </Form.Item>
+        {/* OLIB TASHLANDI: Hafta turi selector */}
 
         <Form.Item
           name="time"
-          label="Vaqt"
+          label="Dars vaqti"
           rules={[{ required: true, message: "Vaqt kiritilishi shart!" }]}
         >
           <TimePicker.RangePicker

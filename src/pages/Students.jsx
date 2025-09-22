@@ -1,3 +1,4 @@
+// src/pages/Students.jsx - Fakultet admin uchun "Barcha fakultetlar" filtrini olib tashlash
 import { useState } from "react";
 import {
   Table,
@@ -9,7 +10,6 @@ import {
   Typography,
   Tabs,
   Badge,
-  Switch,
   Tooltip,
 } from "antd";
 import {
@@ -19,12 +19,8 @@ import {
   GlobalOutlined,
   WarningOutlined,
   TeamOutlined,
-  FilterOutlined,
 } from "@ant-design/icons";
-import {
-  useGetFacultyStudentsQuery,
-  useGetAllFacultiesQuery,
-} from "../store/api/facultyApi";
+import { useGetFacultyStudentsQuery } from "../store/api/facultyApi";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const { Title, Text } = Typography;
@@ -38,14 +34,13 @@ export default function Students() {
     page: 1,
     limit: 10,
   });
-  const [showAllFaculties, setShowAllFaculties] = useState(false);
+
+  // OLIB TASHLANDI: showAllFaculties state
 
   const { data, isLoading } = useGetFacultyStudentsQuery(filters);
-  const { data: facultiesData } = useGetAllFacultiesQuery();
 
   const students = data?.data?.students || [];
   const pagination = data?.data?.pagination || {};
-  const faculties = facultiesData?.data || [];
 
   const columns = [
     {
@@ -201,23 +196,7 @@ export default function Students() {
           </Title>
 
           <div className="flex gap-3 items-center">
-            <div className="flex items-center gap-2">
-              <FilterOutlined className="text-gray-400" />
-              <Text className="text-sm">Barcha fakultetlar:</Text>
-              <Switch
-                checked={showAllFaculties}
-                onChange={(checked) => {
-                  setShowAllFaculties(checked);
-                  if (checked) {
-                    // Barcha fakultetlardan qidirish uchun search maydonini faollashtirish
-                    setFilters((prev) => ({ ...prev, search: "" }));
-                  } else {
-                    // Faqat o'z fakulteti studentlarini ko'rsatish
-                    setFilters((prev) => ({ ...prev, search: "" }));
-                  }
-                }}
-              />
-            </div>
+            {/* OLIB TASHLANDI: Barcha fakultetlar switch */}
 
             <Select
               placeholder="Guruh"
@@ -235,11 +214,7 @@ export default function Students() {
             </Select>
 
             <Input
-              placeholder={
-                showAllFaculties
-                  ? "Barcha fakultetlardan qidirish..."
-                  : "Qidirish..."
-              }
+              placeholder="Qidirish..."
               prefix={<SearchOutlined />}
               style={{ width: 250 }}
               onChange={(e) => handleSearch(e.target.value)}
@@ -310,36 +285,9 @@ export default function Students() {
           onChange={handleTabChange}
           className="mb-4"
         >
-          <TabPane
-            tab={
-              <span>
-                Barcha studentlar <Badge count={totalStudents} showZero />
-              </span>
-            }
-            key="all"
-          />
-          <TabPane
-            tab={
-              <span>
-                Band studentlar{" "}
-                <Badge count={busyStudents} showZero className="bg-green-500" />
-              </span>
-            }
-            key="true"
-          />
-          <TabPane
-            tab={
-              <span>
-                Band bo'lmaganlar{" "}
-                <Badge
-                  count={notBusyStudents}
-                  showZero
-                  className="bg-orange-500"
-                />
-              </span>
-            }
-            key="false"
-          />
+          <TabPane tab={<span>Barcha studentlar</span>} key="all" />
+          <TabPane tab={<span>Band studentlar </span>} key="true" />
+          <TabPane tab={<span>Band bo'lmaganlar </span>} key="false" />
         </Tabs>
 
         <Table
