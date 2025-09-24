@@ -102,10 +102,10 @@ export default function Header({ collapsed, setCollapsed }) {
               className="bg-green-500"
             />
             <div className="text-left">
-              <div className="font-medium">
+              <div className="font-medium mt-[-20px]">
                 {user?.profile?.fullName || user?.username || "Foydalanuvchi"}
               </div>
-              <div className="text-xs text-gray-500">
+              <div className="text-xs mt-[-20px] text-gray-500">
                 {getRoleDisplay(user?.role)}
               </div>
             </div>
