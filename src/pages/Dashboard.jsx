@@ -158,12 +158,6 @@ export default function Dashboard() {
               valueStyle={{ fontSize: "28px", fontWeight: 600, color }}
             />
           </div>
-          {trend && (
-            <div className="flex items-center gap-1 mt-1">
-              <span className="text-xs text-green-500">+{trend}%</span>
-              <span className="text-xs text-gray-400">oldingi oydan</span>
-            </div>
-          )}
         </div>
         <div
           className={`w-16 h-16 rounded-full flex items-center justify-center`}

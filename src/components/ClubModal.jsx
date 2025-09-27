@@ -1,4 +1,3 @@
-// src/components/ClubModal.jsx - Hafta turini olib tashlash
 import { useEffect } from "react";
 import {
   Modal,
@@ -10,11 +9,23 @@ import {
   Space,
   Button,
   message,
+  Tag,
+  Spin,
 } from "antd";
+import {
+  BookOutlined,
+  TagsOutlined,
+  UserOutlined,
+  ClockCircleOutlined,
+  EnvironmentOutlined,
+  TeamOutlined,
+  LinkOutlined,
+} from "@ant-design/icons";
 import {
   useCreateClubMutation,
   useUpdateClubMutation,
   useGetFacultyTutorsQuery,
+  useGetAllCategoriesQuery,
 } from "../store/api/facultyApi";
 import dayjs from "dayjs";
 
@@ -27,7 +38,11 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
   const { data: tutorsData, isLoading: tutorsLoading } =
     useGetFacultyTutorsQuery();
+  const { data: categoriesData, isLoading: categoriesLoading } =
+    useGetAllCategoriesQuery();
+
   const tutors = tutorsData?.data || [];
+  const categories = categoriesData?.data || [];
 
   useEffect(() => {
     if (editingClub) {
@@ -35,12 +50,12 @@ export default function ClubModal({ open, onClose, editingClub }) {
       form.setFieldsValue({
         name: editingClub.name,
         description: editingClub.description,
+        categoryId: editingClub.category?._id,
         tutorId: editingClub.tutor?._id,
         location: editingClub.location,
         capacity: editingClub.capacity,
         telegramChannelLink: editingClub.telegramChannelLink,
         days: editingClub.schedule?.days || [],
-        // OLIB TASHLANDI: weekType
         time:
           scheduleTime?.start && scheduleTime?.end
             ? [
@@ -65,7 +80,6 @@ export default function ClubModal({ open, onClose, editingClub }) {
         ...values,
         schedule: {
           days: values.days,
-          // OLIB TASHLANDI: weekType - default "both" qilib qo'yamiz
           weekType: "both",
           time: {
             start: values.time[0].format("HH:mm"),
@@ -119,13 +133,19 @@ export default function ClubModal({ open, onClose, editingClub }) {
     { value: 7, label: "Yakshanba" },
   ];
 
-  // OLIB TASHLANDI: weekTypes array
-
   const activeTutors = tutors.filter((t) => t.isActive);
+  const activeCategories = categories.filter((c) => c.isActive);
 
   return (
     <Modal
-      title={editingClub ? "To'garakni tahrirlash" : "Yangi to'garak"}
+      title={
+        <div className="flex items-center gap-2">
+          <BookOutlined className="text-green-500" />
+          <span>
+            {editingClub ? "To'garakni tahrirlash" : "Yangi to'garak"}
+          </span>
+        </div>
+      }
       open={open}
       onCancel={onClose}
       footer={null}
@@ -140,7 +160,12 @@ export default function ClubModal({ open, onClose, editingClub }) {
       >
         <Form.Item
           name="name"
-          label="To'garak nomi"
+          label={
+            <span className="flex items-center gap-1">
+              <BookOutlined className="text-gray-500" />
+              To'garak nomi
+            </span>
+          }
           rules={[
             { required: true, message: "To'garak nomi kiritilishi shart!" },
             { min: 2, message: "Kamida 2 ta belgi" },
@@ -152,6 +177,62 @@ export default function ClubModal({ open, onClose, editingClub }) {
             size="large"
             maxLength={100}
           />
+        </Form.Item>
+
+        <Form.Item
+          name="categoryId"
+          label={
+            <span className="flex items-center gap-1">
+              <TagsOutlined className="text-gray-500" />
+              Kategoriya
+            </span>
+          }
+          rules={[{ required: true, message: "Kategoriya tanlanishi shart!" }]}
+        >
+          <Select
+            placeholder="Kategoriyani tanlang"
+            size="large"
+            showSearch
+            loading={categoriesLoading}
+            filterOption={(input, option) =>
+              option?.searchValue?.toLowerCase().includes(input.toLowerCase())
+            }
+            notFoundContent={
+              categoriesLoading ? (
+                <div className="text-center py-2">
+                  <Spin size="small" />
+                  <div className="text-xs mt-1">Yuklanmoqda...</div>
+                </div>
+              ) : activeCategories.length === 0 ? (
+                <div className="text-center py-2 text-gray-500">
+                  Faol kategoriyalar yo'q
+                </div>
+              ) : (
+                "Topilmadi"
+              )
+            }
+          >
+            {activeCategories.map((cat) => (
+              <Select.Option
+                key={cat._id}
+                value={cat._id}
+                searchValue={cat.name}
+              >
+                <div className="flex items-center gap-2">
+                  <div
+                    className="w-4 h-4 rounded-full"
+                    style={{ backgroundColor: cat.color }}
+                  />
+                  <span className="font-medium">{cat.name}</span>
+                  {cat.clubCount > 0 && (
+                    <Tag className="ml-auto" color="default">
+                      {cat.clubCount} ta to'garak
+                    </Tag>
+                  )}
+                </div>
+              </Select.Option>
+            ))}
+          </Select>
         </Form.Item>
 
         <Form.Item
@@ -169,7 +250,12 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
         <Form.Item
           name="tutorId"
-          label="O'qituvchi"
+          label={
+            <span className="flex items-center gap-1">
+              <UserOutlined className="text-gray-500" />
+              O'qituvchi
+            </span>
+          }
           rules={[{ required: true, message: "O'qituvchi tanlanishi shart!" }]}
         >
           <Select
@@ -185,18 +271,30 @@ export default function ClubModal({ open, onClose, editingClub }) {
               label: t.profile?.fullName || t.username,
             }))}
             notFoundContent={
-              tutorsLoading
-                ? "Yuklanmoqda..."
-                : activeTutors.length === 0
-                ? "Faol o'qituvchilar yo'q"
-                : "Topilmadi"
+              tutorsLoading ? (
+                <div className="text-center py-2">
+                  <Spin size="small" />
+                  <div className="text-xs mt-1">Yuklanmoqda...</div>
+                </div>
+              ) : activeTutors.length === 0 ? (
+                <div className="text-center py-2 text-gray-500">
+                  Faol o'qituvchilar yo'q
+                </div>
+              ) : (
+                "Topilmadi"
+              )
             }
           />
         </Form.Item>
 
         <Form.Item
           name="days"
-          label="Dars kunlari"
+          label={
+            <span className="flex items-center gap-1">
+              <ClockCircleOutlined className="text-gray-500" />
+              Dars kunlari
+            </span>
+          }
           rules={[
             { required: true, message: "Kunlar tanlanishi shart!" },
             {
@@ -215,11 +313,14 @@ export default function ClubModal({ open, onClose, editingClub }) {
           />
         </Form.Item>
 
-        {/* OLIB TASHLANDI: Hafta turi selector */}
-
         <Form.Item
           name="time"
-          label="Dars vaqti"
+          label={
+            <span className="flex items-center gap-1">
+              <ClockCircleOutlined className="text-gray-500" />
+              Dars vaqti
+            </span>
+          }
           rules={[{ required: true, message: "Vaqt kiritilishi shart!" }]}
         >
           <TimePicker.RangePicker
@@ -233,7 +334,12 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
         <Form.Item
           name="location"
-          label="Joylashuv"
+          label={
+            <span className="flex items-center gap-1">
+              <EnvironmentOutlined className="text-gray-500" />
+              Joylashuv
+            </span>
+          }
           rules={[{ max: 100, message: "Maksimal 100 ta belgi" }]}
         >
           <Input
@@ -245,7 +351,12 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
         <Form.Item
           name="capacity"
-          label="Sig'im"
+          label={
+            <span className="flex items-center gap-1">
+              <TeamOutlined className="text-gray-500" />
+              Sig'im
+            </span>
+          }
           rules={[
             { type: "number", min: 1, max: 1000, message: "1 dan 1000 gacha" },
           ]}
@@ -261,7 +372,12 @@ export default function ClubModal({ open, onClose, editingClub }) {
 
         <Form.Item
           name="telegramChannelLink"
-          label="Telegram kanal"
+          label={
+            <span className="flex items-center gap-1">
+              <LinkOutlined className="text-gray-500" />
+              Telegram kanal
+            </span>
+          }
           rules={[
             { type: "url", message: "Link formati noto'g'ri" },
             { max: 200, message: "Maksimal 200 ta belgi" },

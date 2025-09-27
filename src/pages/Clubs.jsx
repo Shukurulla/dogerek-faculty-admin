@@ -11,6 +11,7 @@ import {
   Popconfirm,
   message,
   Empty,
+  Tooltip,
 } from "antd";
 import {
   PlusOutlined,
@@ -22,6 +23,7 @@ import {
   EnvironmentOutlined,
   CheckCircleOutlined,
   TeamOutlined,
+  TagsOutlined,
 } from "@ant-design/icons";
 import {
   useGetFacultyClubsQuery,
@@ -54,12 +56,6 @@ export default function Clubs() {
     7: "Ya",
   };
 
-  const weekType = {
-    odd: "Toq haftalar",
-    even: "Juft haftalar",
-    both: "Har hafta",
-  };
-
   const handleEdit = (record) => {
     setEditingClub(record);
     setIsModalOpen(true);
@@ -86,14 +82,29 @@ export default function Clubs() {
             <BookOutlined className="text-green-500" />
             {record.name}
           </div>
+          {record.category && (
+            <Tag
+              color={record.category.color}
+              icon={<TagsOutlined />}
+              className="mt-1"
+              style={{
+                backgroundColor: `${record.category.color}20`,
+                borderColor: record.category.color,
+              }}
+            >
+              {record.category.name}
+            </Tag>
+          )}
           {record.description && (
-            <Text className="text-gray-500 text-xs">{record.description}</Text>
+            <Text className="text-gray-500 text-xs block mt-1">
+              {record.description}
+            </Text>
           )}
         </div>
       ),
     },
     {
-      title: "Tutor",
+      title: "O'qituvchi",
       key: "tutor",
       render: (_, record) => (
         <div className="flex items-center gap-2">
@@ -136,17 +147,6 @@ export default function Clubs() {
                 </Tag>
               ))}
             </div>
-            <Tag
-              color={
-                record.schedule?.weekType === "odd"
-                  ? "orange"
-                  : record.schedule?.weekType === "even"
-                  ? "purple"
-                  : "green"
-              }
-            >
-              {weekType[record.schedule?.weekType]}
-            </Tag>
           </div>
         );
       },
@@ -194,6 +194,26 @@ export default function Clubs() {
           </div>
         );
       },
+    },
+    {
+      title: "Telegram",
+      key: "telegram",
+      render: (_, record) =>
+        record.telegramChannelLink ? (
+          <Tooltip title={record.telegramChannelLink}>
+            <a
+              href={record.telegramChannelLink}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              <Tag color="blue" className="cursor-pointer">
+                Kanal
+              </Tag>
+            </a>
+          </Tooltip>
+        ) : (
+          <Tag color="default">Yo'q</Tag>
+        ),
     },
     {
       title: "Status",
@@ -250,6 +270,7 @@ export default function Clubs() {
     (sum, c) => sum + (c.currentStudents || 0),
     0
   );
+  const totalCapacity = clubs.reduce((sum, c) => sum + (c.capacity || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -273,7 +294,7 @@ export default function Clubs() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <Card className="border border-green-200 bg-green-50">
             <div className="flex items-center justify-between">
               <div>
@@ -309,6 +330,28 @@ export default function Clubs() {
               <TeamOutlined className="text-3xl text-purple-400" />
             </div>
           </Card>
+
+          <Card className="border border-orange-200 bg-orange-50">
+            <div className="flex items-center justify-between">
+              <div>
+                <Text className="text-gray-600">To'liqlik</Text>
+                <div className="text-2xl font-bold text-orange-600 mt-1">
+                  {totalCapacity > 0
+                    ? `${((totalStudents / totalCapacity) * 100).toFixed(0)}%`
+                    : "0%"}
+                </div>
+              </div>
+              <Progress
+                type="circle"
+                percent={
+                  totalCapacity > 0 ? (totalStudents / totalCapacity) * 100 : 0
+                }
+                width={50}
+                strokeColor="#fb923c"
+                format={() => ""}
+              />
+            </div>
+          </Card>
         </div>
 
         {clubs.length > 0 ? (
@@ -328,6 +371,7 @@ export default function Clubs() {
               },
             }}
             className="shadow-sm"
+            scroll={{ x: 1200 }}
           />
         ) : (
           <div className="text-center py-12">

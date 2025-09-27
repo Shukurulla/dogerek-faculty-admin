@@ -8,7 +8,7 @@ export const facultyApi = baseApi.injectEndpoints({
       providesTags: ["Dashboard"],
     }),
 
-    // Clubs - olib tashlangan fakultet filtri
+    // Clubs
     getFacultyClubs: builder.query({
       query: (params) => ({
         url: "/faculty/clubs",
@@ -43,7 +43,7 @@ export const facultyApi = baseApi.injectEndpoints({
       invalidatesTags: ["Club", "Dashboard"],
     }),
 
-    // Tutors
+    // Tutors (O'qituvchilar)
     getFacultyTutors: builder.query({
       query: () => "/faculty/tutors",
       providesTags: ["Tutor"],
@@ -75,7 +75,7 @@ export const facultyApi = baseApi.injectEndpoints({
       invalidatesTags: ["Tutor", "Dashboard"],
     }),
 
-    // Students - barcha studentlar (filtrlash orqali fakultet bo'yicha)
+    // Students
     getFacultyStudents: builder.query({
       query: (params) => ({
         url: "/faculty/students",
@@ -84,7 +84,7 @@ export const facultyApi = baseApi.injectEndpoints({
       providesTags: ["Student"],
     }),
 
-    // Club enrollments - barcha fakultetlardan
+    // Club enrollments
     getClubEnrollments: builder.query({
       query: (params) => ({
         url: "/faculty/enrollments",
@@ -126,6 +126,12 @@ export const facultyApi = baseApi.injectEndpoints({
       }),
       providesTags: ["Group"],
     }),
+
+    // Get all categories - NEW
+    getAllCategories: builder.query({
+      query: () => "/categories",
+      providesTags: ["Category"],
+    }),
   }),
 });
 
@@ -145,4 +151,5 @@ export const {
   useGetFacultyAttendanceQuery,
   useGetAllFacultiesQuery,
   useGetAllGroupsQuery,
+  useGetAllCategoriesQuery,
 } = facultyApi;

@@ -29,36 +29,36 @@ import {
   useGetFacultyTutorsQuery,
   useDeleteTutorMutation,
 } from "../store/api/facultyApi";
-import TutorModal from "../components/TutorModal";
+import TeacherModal from "../components/TeacherModal";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const { Title, Text } = Typography;
 
-export default function Tutors() {
+export default function Teachers() {
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingTutor, setEditingTutor] = useState(null);
+  const [editingTeacher, setEditingTeacher] = useState(null);
   const [searchText, setSearchText] = useState("");
 
   const { data, isLoading } = useGetFacultyTutorsQuery();
-  const [deleteTutor] = useDeleteTutorMutation();
+  const [deleteTeacher] = useDeleteTutorMutation();
 
-  const tutors = data?.data || [];
+  const teachers = data?.data || [];
 
-  // Filter tutors based on search
-  const filteredTutors = tutors.filter((tutor) =>
-    tutor.profile?.fullName?.toLowerCase().includes(searchText.toLowerCase())
+  // Filter teachers based on search
+  const filteredTeachers = teachers.filter((teacher) =>
+    teacher.profile?.fullName?.toLowerCase().includes(searchText.toLowerCase())
   );
 
   const handleEdit = (record) => {
-    setEditingTutor(record);
+    setEditingTeacher(record);
     setIsModalOpen(true);
   };
 
   const handleDelete = async (id) => {
     try {
-      const result = await deleteTutor(id).unwrap();
+      const result = await deleteTeacher(id).unwrap();
       if (result.success) {
-        message.success("Tutor o'chirildi");
+        message.success("O'qituvchi o'chirildi");
       }
     } catch (error) {
       message.error(error.data?.message || "Xatolik yuz berdi");
@@ -67,8 +67,8 @@ export default function Tutors() {
 
   const columns = [
     {
-      title: "Tutor",
-      key: "tutor",
+      title: "O'qituvchi",
+      key: "teacher",
       render: (_, record) => (
         <div className="flex items-center gap-3">
           <Avatar
@@ -190,7 +190,7 @@ export default function Tutors() {
             title="O'chirishni tasdiqlaysizmi?"
             description={
               record.assignedClubs?.length > 0
-                ? "Bu tutorga biriktirilgan to'garaklar mavjud!"
+                ? "Bu o'qituvchiga biriktirilgan to'garaklar mavjud!"
                 : "Bu amalni bekor qilib bo'lmaydi"
             }
             onConfirm={() => handleDelete(record._id)}
@@ -209,10 +209,10 @@ export default function Tutors() {
 
   // Statistics
   const stats = {
-    total: tutors.length,
-    active: tutors.filter((t) => t.isActive).length,
-    withClubs: tutors.filter((t) => t.assignedClubs?.length > 0).length,
-    totalClubs: tutors.reduce(
+    total: teachers.length,
+    active: teachers.filter((t) => t.isActive).length,
+    withClubs: teachers.filter((t) => t.assignedClubs?.length > 0).length,
+    totalClubs: teachers.reduce(
       (sum, t) => sum + (t.assignedClubs?.length || 0),
       0
     ),
@@ -223,7 +223,7 @@ export default function Tutors() {
       <Card className="border-0 shadow-md">
         <div className="flex justify-between items-center mb-6">
           <Title level={3} className="!mb-0">
-            Tutorlar
+            O'qituvchilar
           </Title>
 
           <div className="flex gap-3">
@@ -239,13 +239,13 @@ export default function Tutors() {
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => {
-                setEditingTutor(null);
+                setEditingTeacher(null);
                 setIsModalOpen(true);
               }}
               size="large"
               className="bg-gradient-to-r from-green-500 to-emerald-600 border-0"
             >
-              Yangi tutor
+              Yangi o'qituvchi
             </Button>
           </div>
         </div>
@@ -255,7 +255,7 @@ export default function Tutors() {
           <Card className="border border-blue-200 bg-blue-50">
             <div className="flex items-center justify-between">
               <div>
-                <Text className="text-gray-600">Jami tutorlar</Text>
+                <Text className="text-gray-600">Jami o'qituvchilar</Text>
                 <div className="text-2xl font-bold text-blue-600 mt-1">
                   {stats.total}
                 </div>
@@ -267,7 +267,7 @@ export default function Tutors() {
           <Card className="border border-green-200 bg-green-50">
             <div className="flex items-center justify-between">
               <div>
-                <Text className="text-gray-600">Faol tutorlar</Text>
+                <Text className="text-gray-600">Faol o'qituvchilar</Text>
                 <div className="text-2xl font-bold text-green-600 mt-1">
                   {stats.active}
                 </div>
@@ -303,7 +303,7 @@ export default function Tutors() {
 
         <Table
           columns={columns}
-          dataSource={filteredTutors}
+          dataSource={filteredTeachers}
           rowKey="_id"
           pagination={{
             pageSize: 10,
@@ -314,13 +314,13 @@ export default function Tutors() {
         />
       </Card>
 
-      <TutorModal
+      <TeacherModal
         open={isModalOpen}
         onClose={() => {
           setIsModalOpen(false);
-          setEditingTutor(null);
+          setEditingTeacher(null);
         }}
-        editingTutor={editingTutor}
+        editingTeacher={editingTeacher}
       />
     </div>
   );

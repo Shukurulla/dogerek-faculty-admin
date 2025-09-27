@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Card,
   DatePicker,
@@ -25,6 +25,7 @@ import {
   BookOutlined,
   CalendarOutlined,
   TrophyOutlined,
+  TagsOutlined,
 } from "@ant-design/icons";
 import {
   BarChart,
@@ -45,6 +46,7 @@ import {
   useGetFacultyClubsQuery,
   useGetFacultyStudentsQuery,
   useGetFacultyAttendanceQuery,
+  useGetAllCategoriesQuery,
 } from "../store/api/facultyApi";
 import LoadingSpinner from "../components/LoadingSpinner";
 import dayjs from "dayjs";
@@ -56,26 +58,41 @@ const { TabPane } = Tabs;
 export default function Reports() {
   const [dateRange, setDateRange] = useState([null, null]);
   const [selectedClub, setSelectedClub] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [allStudents, setAllStudents] = useState([]);
 
+  // API Queries
+  const { data: categoriesData } = useGetAllCategoriesQuery();
   const { data: clubsData, isLoading: loadingClubs } = useGetFacultyClubsQuery({
     limit: 100,
+    categoryId: selectedCategory,
   });
+
+  // Get ALL students with proper pagination handling
   const { data: studentsData, isLoading: loadingStudents } =
-    useGetFacultyStudentsQuery({ limit: 1000 });
+    useGetFacultyStudentsQuery({
+      limit: 10000, // Get all students
+      page: 1,
+    });
+
   const { data: attendanceData } = useGetFacultyAttendanceQuery({
     clubId: selectedClub,
     startDate: dateRange[0]?.format("YYYY-MM-DD"),
     endDate: dateRange[1]?.format("YYYY-MM-DD"),
-    limit: 200,
+    limit: 500, // Increased limit for attendance
   });
 
+  const categories = categoriesData?.data || [];
   const clubs = clubsData?.data?.clubs || [];
   const students = studentsData?.data?.students || [];
+  const totalStudentsCount =
+    studentsData?.data?.pagination?.total || students.length;
   const attendance = attendanceData?.data?.attendance || [];
 
   if (loadingClubs || loadingStudents) return <LoadingSpinner size="large" />;
 
-  // Real statistics calculation
+  // Real statistics calculation using actual data
   const busyStudents = students.filter(
     (s) =>
       s.enrolledClubs?.filter((e) => e.status === "approved").length > 0 ||
@@ -83,33 +100,52 @@ export default function Reports() {
   );
 
   const stats = {
-    totalStudents: students.length,
+    totalStudents: totalStudentsCount, // Use the total from pagination
     busyCount: busyStudents.length,
-    notBusyCount: students.length - busyStudents.length,
+    notBusyCount: totalStudentsCount - busyStudents.length,
     totalClubs: clubs.length,
     activeClubs: clubs.filter((c) => c.isActive).length,
     averageClubSize:
       clubs.length > 0
         ? Math.round(
-            clubs.reduce(
-              (sum, c) =>
-                sum +
-                (c.enrolledStudents?.filter((e) => e.status === "active")
-                  .length || 0),
-              0
-            ) / clubs.length
+            clubs.reduce((sum, c) => sum + (c.currentStudents || 0), 0) /
+              clubs.length
           )
         : 0,
   };
 
+  // Category statistics with real data
+  const categoryStats = categories
+    .map((category) => {
+      const categoryClubs = clubs.filter(
+        (club) => club.category?._id === category._id
+      );
+      const studentCount = categoryClubs.reduce(
+        (sum, club) => sum + (club.currentStudents || 0),
+        0
+      );
+      return {
+        _id: category._id,
+        name: category.name,
+        color: category.color,
+        clubs: categoryClubs.length,
+        students: studentCount,
+      };
+    })
+    .filter((cat) => cat.clubs > 0);
+
   // Real chart data from clubs
-  const clubsChartData = clubs.map((club) => ({
-    name:
-      club.name.length > 15 ? club.name.substring(0, 15) + "..." : club.name,
-    studentlar:
-      club.enrolledStudents?.filter((e) => e.status === "active").length || 0,
-    sigim: club.capacity || 0,
-  }));
+  const clubsChartData = clubs
+    .filter(
+      (club) => !selectedCategory || club.category?._id === selectedCategory
+    )
+    .map((club) => ({
+      name:
+        club.name.length > 20 ? club.name.substring(0, 20) + "..." : club.name,
+      studentlar: club.currentStudents || 0,
+      sigim: club.capacity || 0,
+      category: club.category?.name || "Kategoriyasiz",
+    }));
 
   const pieData = [
     { name: "Band", value: stats.busyCount, color: "#52c41a" },
@@ -120,9 +156,9 @@ export default function Reports() {
   const getWeeklyAttendanceData = () => {
     const last7Days = Array.from({ length: 7 }, (_, i) => {
       const date = new Date();
-      date.setDate(date.getDate() - i);
+      date.setDate(date.getDate() - (6 - i));
       return date;
-    }).reverse();
+    });
 
     return last7Days.map((date) => {
       const dayName = date.toLocaleDateString("uz", { weekday: "short" });
@@ -159,28 +195,25 @@ export default function Reports() {
   const topClubs = clubs
     .map((club) => ({
       ...club,
-      studentCount:
-        club.enrolledStudents?.filter((e) => e.status === "active").length || 0,
+      studentCount: club.currentStudents || 0,
       fillRate: club.capacity
-        ? ((club.enrolledStudents?.filter((e) => e.status === "active")
-            .length || 0) /
-            club.capacity) *
-          100
+        ? ((club.currentStudents || 0) / club.capacity) * 100
         : 0,
     }))
     .sort((a, b) => b.studentCount - a.studentCount)
     .slice(0, 5);
 
-  // Real top students calculation
+  // Real top students calculation from attendance data
   const getTopStudents = () => {
     const studentsWithClubs = students.filter(
       (s) => s.enrolledClubs?.filter((e) => e.status === "approved").length > 0
     );
 
-    // Calculate attendance for each student from attendance records
     const studentsWithAttendance = studentsWithClubs.map((student) => {
       const studentAttendanceRecords = attendance.filter((att) =>
-        att.students?.some((s) => s.student === student._id)
+        att.students?.some(
+          (s) => s.student?._id === student._id || s.student === student._id
+        )
       );
 
       let totalClasses = 0;
@@ -188,7 +221,7 @@ export default function Reports() {
 
       studentAttendanceRecords.forEach((att) => {
         const studentRecord = att.students?.find(
-          (s) => s.student === student._id
+          (s) => s.student?._id === student._id || s.student === student._id
         );
         if (studentRecord) {
           totalClasses++;
@@ -216,102 +249,173 @@ export default function Reports() {
     });
 
     return studentsWithAttendance
-      .filter((s) => s.totalClasses > 0) // Faqat davomat ma'lumotlari bor studentlar
+      .filter((s) => s.totalClasses > 0)
       .sort((a, b) => b.attendance - a.attendance)
-      .slice(0, 5);
+      .slice(0, 10);
   };
 
   const topStudents = getTopStudents();
 
   const handleExport = (type) => {
     try {
-      if (type === "pdf") {
-        // PDF export logic
-        const reportData = {
-          stats,
-          clubs: clubs.length,
-          students: students.length,
-          date: new Date().toLocaleDateString("uz"),
-        };
+      // Create CSV content
+      const csvContent = [
+        ["Hisobot sanasi", new Date().toLocaleDateString("uz")],
+        [""],
+        ["UMUMIY STATISTIKA"],
+        ["Jami studentlar", stats.totalStudents],
+        ["Band studentlar", stats.busyCount],
+        ["Band bo'lmagan studentlar", stats.notBusyCount],
+        ["Faol to'garaklar", stats.activeClubs],
+        ["O'rtacha to'garak hajmi", stats.averageClubSize],
+        [""],
+        ["KATEGORIYALAR BO'YICHA"],
+        ["Kategoriya", "To'garaklar", "Studentlar"],
+        ...categoryStats.map((cat) => [cat.name, cat.clubs, cat.students]),
+        [""],
+        ["TOP TO'GARAKLAR"],
+        ["To'garak nomi", "Studentlar soni", "Sig'im", "To'liqlik %"],
+        ...topClubs.map((club) => [
+          club.name,
+          club.studentCount,
+          club.capacity || "Cheklanmagan",
+          club.fillRate ? `${club.fillRate.toFixed(1)}%` : "N/A",
+        ]),
+      ];
 
-        // Bu yerda real PDF export implementatsiya bo'lishi kerak
-        console.log("PDF export data:", reportData);
-        message.success("PDF hisobot tayyorlanmoqda...");
-      }
+      // Convert to CSV string
+      const csv = csvContent.map((row) => row.join(",")).join("\n");
+
+      // Create blob and download
+      const blob = new Blob(["\ufeff" + csv], {
+        type: "text/csv;charset=utf-8;",
+      });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `hisobot_${dayjs().format("YYYY-MM-DD")}.csv`
+      );
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      message.success("Hisobot muvaffaqiyatli yuklandi");
     } catch (error) {
       message.error("Eksport qilishda xatolik yuz berdi");
     }
   };
 
-  // Real schedule analysis
-  const getScheduleAnalysis = () => {
-    const dayStats = {
-      1: { name: "Dushanba", clubs: [] },
-      2: { name: "Seshanba", clubs: [] },
-      3: { name: "Chorshanba", clubs: [] },
-      4: { name: "Payshanba", clubs: [] },
-      5: { name: "Juma", clubs: [] },
-      6: { name: "Shanba", clubs: [] },
-      7: { name: "Yakshanba", clubs: [] },
-    };
-
-    clubs.forEach((club) => {
-      if (club.schedule?.days?.length) {
-        club.schedule.days.forEach((day) => {
-          if (dayStats[day]) {
-            dayStats[day].clubs.push(club);
-          }
-        });
-      }
-    });
-
-    return Object.values(dayStats);
-  };
-
-  const scheduleAnalysis = getScheduleAnalysis();
+  const COLORS = ["#52c41a", "#1890ff", "#722ed1", "#fa8c16", "#ff4d4f"];
 
   return (
     <div className="space-y-6">
       <Card className="border-0 shadow-md">
-        <div className="flex justify-between items-center mb-6">
-          <Title level={3} className="!mb-0">
-            Hisobotlar va Statistika
-          </Title>
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <Title level={3} className="!mb-0">
+              Hisobotlar va Statistika
+            </Title>
 
-          <div className="flex gap-3">
-            <RangePicker
-              format="DD.MM.YYYY"
-              placeholder={["Boshlanish", "Tugash"]}
-              onChange={(dates) => setDateRange(dates || [null, null])}
-            />
-            <Select
-              placeholder="To'garak tanlang"
-              style={{ width: 200 }}
-              allowClear
-              onChange={setSelectedClub}
-            >
-              <Select.Option value={null}>Barcha to'garaklar</Select.Option>
-              {clubs.map((club) => (
-                <Select.Option key={club._id} value={club._id}>
-                  {club.name}
-                </Select.Option>
-              ))}
-            </Select>
-            <Button
-              icon={<DownloadOutlined />}
-              onClick={() => handleExport("pdf")}
-            >
-              PDF
-            </Button>
-            <Button
-              icon={<PrinterOutlined />}
-              onClick={() => window.print()}
-              type="primary"
-              className="bg-gradient-to-r from-green-500 to-emerald-600 border-0"
-            >
-              Chop etish
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                icon={<DownloadOutlined />}
+                onClick={() => handleExport("csv")}
+                size="large"
+              >
+                CSV yuklash
+              </Button>
+
+              <Button
+                icon={<PrinterOutlined />}
+                onClick={() => window.print()}
+                type="primary"
+                size="large"
+                className="bg-gradient-to-r from-green-500 to-emerald-600 border-0"
+              >
+                Chop etish
+              </Button>
+            </div>
           </div>
+
+          {/* Filters Section */}
+          <Card className="bg-gray-50 border-gray-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <TagsOutlined className="mr-1" />
+                  Kategoriya bo'yicha filter
+                </label>
+                <Select
+                  placeholder="Kategoriyani tanlang"
+                  style={{ width: "100%" }}
+                  size="large"
+                  allowClear
+                  onChange={setSelectedCategory}
+                  value={selectedCategory}
+                  className="shadow-sm"
+                >
+                  {categories.map((cat) => (
+                    <Select.Option key={cat._id} value={cat._id}>
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="w-3 h-3 rounded-full"
+                          style={{ backgroundColor: cat.color }}
+                        />
+                        <span>{cat.name}</span>
+                      </div>
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <BookOutlined className="mr-1" />
+                  To'garak bo'yicha filter
+                </label>
+                <Select
+                  placeholder="To'garakni tanlang"
+                  style={{ width: "100%" }}
+                  size="large"
+                  allowClear
+                  onChange={setSelectedClub}
+                  value={selectedClub}
+                  className="shadow-sm"
+                  showSearch
+                  filterOption={(input, option) =>
+                    option?.children
+                      ?.toLowerCase()
+                      .includes(input.toLowerCase())
+                  }
+                >
+                  <Select.Option value={null}>Barcha to'garaklar</Select.Option>
+                  {clubs.map((club) => (
+                    <Select.Option key={club._id} value={club._id}>
+                      {club.name}
+                    </Select.Option>
+                  ))}
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <CalendarOutlined className="mr-1" />
+                  Sana oralig'i
+                </label>
+                <RangePicker
+                  format="DD.MM.YYYY"
+                  placeholder={["Boshlanish", "Tugash"]}
+                  onChange={(dates) => setDateRange(dates || [null, null])}
+                  style={{ width: "100%" }}
+                  size="large"
+                  className="shadow-sm"
+                />
+              </div>
+            </div>
+          </Card>
         </div>
 
         <Tabs defaultActiveKey="overview">
@@ -346,7 +450,9 @@ export default function Reports() {
                   <Progress
                     percent={
                       stats.totalStudents > 0
-                        ? (stats.busyCount / stats.totalStudents) * 100
+                        ? Math.round(
+                            (stats.busyCount / stats.totalStudents) * 100
+                          )
                         : 0
                     }
                     strokeColor="#52c41a"
@@ -430,6 +536,95 @@ export default function Reports() {
           <TabPane
             tab={
               <span>
+                <TagsOutlined /> Kategoriyalar
+              </span>
+            }
+            key="categories"
+          >
+            <Row gutter={[16, 16]}>
+              <Col span={24}>
+                <Card title="Kategoriyalar bo'yicha statistika">
+                  {categoryStats.length > 0 ? (
+                    <>
+                      <Row gutter={[16, 16]}>
+                        {categoryStats.map((cat, index) => (
+                          <Col xs={24} sm={12} md={8} lg={6} key={cat._id}>
+                            <Card
+                              className="text-center hover:shadow-lg transition-shadow"
+                              style={{
+                                borderColor: cat.color,
+                                borderWidth: 2,
+                              }}
+                            >
+                              <Tag
+                                color={cat.color}
+                                className="mb-3"
+                                style={{
+                                  fontSize: "14px",
+                                  padding: "4px 12px",
+                                  backgroundColor: `${cat.color}20`,
+                                }}
+                              >
+                                {cat.name}
+                              </Tag>
+                              <div className="space-y-2">
+                                <div>
+                                  <Text className="text-gray-500 block">
+                                    To'garaklar
+                                  </Text>
+                                  <Text className="text-xl font-bold">
+                                    {cat.clubs}
+                                  </Text>
+                                </div>
+                                <div>
+                                  <Text className="text-gray-500 block">
+                                    Studentlar
+                                  </Text>
+                                  <Text className="text-xl font-bold">
+                                    {cat.students}
+                                  </Text>
+                                </div>
+                              </div>
+                            </Card>
+                          </Col>
+                        ))}
+                      </Row>
+
+                      <div className="mt-6">
+                        <ResponsiveContainer width="100%" height={400}>
+                          <BarChart data={categoryStats}>
+                            <CartesianGrid strokeDasharray="3 3" />
+                            <XAxis dataKey="name" />
+                            <YAxis />
+                            <Tooltip />
+                            <Legend />
+                            <Bar
+                              dataKey="clubs"
+                              fill="#1890ff"
+                              name="To'garaklar"
+                            />
+                            <Bar
+                              dataKey="students"
+                              fill="#52c41a"
+                              name="Studentlar"
+                            />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      Kategoriyalar mavjud emas
+                    </div>
+                  )}
+                </Card>
+              </Col>
+            </Row>
+          </TabPane>
+
+          <TabPane
+            tab={
+              <span>
                 <BookOutlined /> To'garaklar
               </span>
             }
@@ -438,26 +633,32 @@ export default function Reports() {
             <Row gutter={[16, 16]}>
               <Col span={24}>
                 <Card title="To'garaklar bo'yicha studentlar taqsimoti">
-                  <ResponsiveContainer width="100%" height={400}>
-                    <BarChart data={clubsChartData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis
-                        dataKey="name"
-                        angle={-45}
-                        textAnchor="end"
-                        height={100}
-                      />
-                      <YAxis />
-                      <Tooltip />
-                      <Legend />
-                      <Bar
-                        dataKey="studentlar"
-                        fill="#52c41a"
-                        name="Studentlar"
-                      />
-                      <Bar dataKey="sigim" fill="#1890ff" name="Sig'im" />
-                    </BarChart>
-                  </ResponsiveContainer>
+                  {clubsChartData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={400}>
+                      <BarChart data={clubsChartData}>
+                        <CartesianGrid strokeDasharray="3 3" />
+                        <XAxis
+                          dataKey="name"
+                          angle={-45}
+                          textAnchor="end"
+                          height={100}
+                        />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar
+                          dataKey="studentlar"
+                          fill="#52c41a"
+                          name="Studentlar"
+                        />
+                        <Bar dataKey="sigim" fill="#1890ff" name="Sig'im" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      To'garaklar mavjud emas
+                    </div>
+                  )}
                 </Card>
               </Col>
 
@@ -470,86 +671,112 @@ export default function Reports() {
                     </span>
                   }
                 >
-                  <Table
-                    dataSource={topClubs}
-                    rowKey="_id"
-                    pagination={false}
-                    size="small"
-                    columns={[
-                      {
-                        title: "#",
-                        key: "index",
-                        width: 50,
-                        render: (_, __, index) => (
-                          <Tag color={index === 0 ? "gold" : "default"}>
-                            {index + 1}
-                          </Tag>
-                        ),
-                      },
-                      {
-                        title: "To'garak",
-                        dataIndex: "name",
-                        key: "name",
-                      },
-                      {
-                        title: "Studentlar",
-                        dataIndex: "studentCount",
-                        key: "studentCount",
-                        render: (count) => <Tag color="green">{count} ta</Tag>,
-                      },
-                      {
-                        title: "To'liq",
-                        dataIndex: "fillRate",
-                        key: "fillRate",
-                        render: (rate) => (
-                          <Progress
-                            percent={rate}
-                            size="small"
-                            strokeColor={
-                              rate > 90
-                                ? "#ff4d4f"
-                                : rate > 70
-                                ? "#faad14"
-                                : "#52c41a"
-                            }
-                          />
-                        ),
-                      },
-                    ]}
-                  />
+                  {topClubs.length > 0 ? (
+                    <Table
+                      dataSource={topClubs}
+                      rowKey="_id"
+                      pagination={false}
+                      size="small"
+                      columns={[
+                        {
+                          title: "#",
+                          key: "index",
+                          width: 50,
+                          render: (_, __, index) => (
+                            <Tag color={index === 0 ? "gold" : "default"}>
+                              {index + 1}
+                            </Tag>
+                          ),
+                        },
+                        {
+                          title: "To'garak",
+                          dataIndex: "name",
+                          key: "name",
+                          ellipsis: true,
+                        },
+                        {
+                          title: "Kategoriya",
+                          key: "category",
+                          render: (_, record) =>
+                            record.category ? (
+                              <Tag
+                                color={record.category.color}
+                                style={{
+                                  backgroundColor: `${record.category.color}20`,
+                                }}
+                              >
+                                {record.category.name}
+                              </Tag>
+                            ) : (
+                              <Tag>Yo'q</Tag>
+                            ),
+                        },
+                        {
+                          title: "Studentlar",
+                          dataIndex: "studentCount",
+                          key: "studentCount",
+                          render: (count) => (
+                            <Tag color="green">{count} ta</Tag>
+                          ),
+                        },
+                        {
+                          title: "To'liq",
+                          dataIndex: "fillRate",
+                          key: "fillRate",
+                          render: (rate) => (
+                            <Progress
+                              percent={Math.round(rate)}
+                              size="small"
+                              strokeColor={
+                                rate > 90
+                                  ? "#ff4d4f"
+                                  : rate > 70
+                                  ? "#faad14"
+                                  : "#52c41a"
+                              }
+                            />
+                          ),
+                        },
+                      ]}
+                    />
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      To'garaklar mavjud emas
+                    </div>
+                  )}
                 </Card>
               </Col>
 
               <Col xs={24} lg={12}>
-                <Card
-                  title={
-                    <span>
-                      <CalendarOutlined /> To'garaklar jadvali
-                    </span>
-                  }
-                >
-                  <div className="space-y-3">
-                    {scheduleAnalysis.slice(0, 5).map((day) => (
-                      <div
-                        key={day.name}
-                        className="flex items-center justify-between p-2 bg-gray-50 rounded"
-                      >
-                        <Text className="font-medium">{day.name}</Text>
-                        <div className="flex gap-1">
-                          {day.clubs.slice(0, 3).map((club, i) => (
-                            <Tag key={i} color="purple" title={club.name}>
-                              {club.name.length > 8
-                                ? club.name.substring(0, 8) + "..."
-                                : club.name}
-                            </Tag>
+                <Card title="Kategoriyalar bo'yicha to'garaklar">
+                  {categoryStats.length > 0 ? (
+                    <ResponsiveContainer width="100%" height={300}>
+                      <PieChart>
+                        <Pie
+                          data={categoryStats}
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          dataKey="clubs"
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          {categoryStats.map((entry, index) => (
+                            <Cell
+                              key={`cell-${index}`}
+                              fill={
+                                entry.color || COLORS[index % COLORS.length]
+                              }
+                            />
                           ))}
-                          {day.clubs.length > 3 && (
-                            <Tag color="default">+{day.clubs.length - 3}</Tag>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="text-center py-8 text-gray-500">
+                      Kategoriyalar mavjud emas
+                    </div>
+                  )}
                 </Card>
               </Col>
             </Row>
@@ -565,7 +792,7 @@ export default function Reports() {
           >
             <Row gutter={[16, 16]}>
               <Col span={24}>
-                <Card title="Eng faol studentlar (real davomat asosida)">
+                <Card title="Eng faol studentlar (davomat asosida)">
                   {topStudents.length > 0 ? (
                     <Table
                       dataSource={topStudents}

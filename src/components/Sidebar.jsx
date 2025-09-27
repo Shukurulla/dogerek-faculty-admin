@@ -11,7 +11,6 @@ import {
 } from "@ant-design/icons";
 
 const { Sider } = Layout;
-
 const menuItems = [
   {
     key: "/",
@@ -24,9 +23,9 @@ const menuItems = [
     label: "To'garaklar",
   },
   {
-    key: "/tutors",
+    key: "/teachers",
     icon: <UserOutlined />,
-    label: "Tutorlar",
+    label: "O'qituvchilar",
   },
   {
     key: "/students",

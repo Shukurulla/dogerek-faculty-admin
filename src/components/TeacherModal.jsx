@@ -1,49 +1,53 @@
 import { useEffect } from "react";
 import { Modal, Form, Input, Space, Button, message } from "antd";
 import {
+  UserOutlined,
+  LockOutlined,
+  PhoneOutlined,
+  MailOutlined,
+} from "@ant-design/icons";
+import {
   useCreateTutorMutation,
   useUpdateTutorMutation,
 } from "../store/api/facultyApi";
 
-export default function TutorModal({ open, onClose, editingTutor }) {
+export default function TeacherModal({ open, onClose, editingTeacher }) {
   const [form] = Form.useForm();
-  const [createTutor, { isLoading: creating }] = useCreateTutorMutation();
-  const [updateTutor, { isLoading: updating }] = useUpdateTutorMutation();
+  const [createTeacher, { isLoading: creating }] = useCreateTutorMutation();
+  const [updateTeacher, { isLoading: updating }] = useUpdateTutorMutation();
 
   useEffect(() => {
-    if (editingTutor) {
-      // Real tutor ma'lumotlarini formaga yuklaymiz
+    if (editingTeacher) {
       form.setFieldsValue({
-        username: editingTutor.username,
-        fullName: editingTutor.profile?.fullName,
-        phone: editingTutor.profile?.phone?.replace("+998", "") || "",
-        email: editingTutor.profile?.email || "",
+        username: editingTeacher.username,
+        fullName: editingTeacher.profile?.fullName,
+        phone: editingTeacher.profile?.phone?.replace("+998", "") || "",
+        email: editingTeacher.profile?.email || "",
       });
     } else {
       form.resetFields();
     }
-  }, [editingTutor, form]);
+  }, [editingTeacher, form]);
 
   const handleSubmit = async (values) => {
     try {
-      // Telefon raqamni formatlash
       const formattedValues = {
         ...values,
         phone: values.phone ? values.phone.replace(/\D/g, "") : "",
       };
 
-      if (editingTutor) {
-        const result = await updateTutor({
-          id: editingTutor._id,
+      if (editingTeacher) {
+        const result = await updateTeacher({
+          id: editingTeacher._id,
           ...formattedValues,
         }).unwrap();
         if (result.success) {
-          message.success("Tutor ma'lumotlari yangilandi");
+          message.success("O'qituvchi ma'lumotlari yangilandi");
         }
       } else {
-        const result = await createTutor(formattedValues).unwrap();
+        const result = await createTeacher(formattedValues).unwrap();
         if (result.success) {
-          message.success("Tutor muvaffaqiyatli qo'shildi");
+          message.success("O'qituvchi muvaffaqiyatli qo'shildi");
         }
       }
       onClose();
@@ -54,7 +58,6 @@ export default function TutorModal({ open, onClose, editingTutor }) {
     }
   };
 
-  // Telefon raqam validatsiyasi
   const validatePhone = (_, value) => {
     if (!value) return Promise.resolve();
     const cleanValue = value.replace(/\D/g, "");
@@ -68,7 +71,14 @@ export default function TutorModal({ open, onClose, editingTutor }) {
 
   return (
     <Modal
-      title={editingTutor ? "Tutorni tahrirlash" : "Yangi tutor"}
+      title={
+        <div className="flex items-center gap-2">
+          <UserOutlined className="text-green-500" />
+          <span>
+            {editingTeacher ? "O'qituvchini tahrirlash" : "Yangi o'qituvchi"}
+          </span>
+        </div>
+      }
       open={open}
       onCancel={onClose}
       footer={null}
@@ -84,7 +94,12 @@ export default function TutorModal({ open, onClose, editingTutor }) {
       >
         <Form.Item
           name="username"
-          label="Username"
+          label={
+            <span className="flex items-center gap-1">
+              <UserOutlined className="text-gray-500" />
+              Username
+            </span>
+          }
           rules={[
             { required: true, message: "Username kiritilishi shart!" },
             { min: 3, message: "Kamida 3 ta belgi" },
@@ -96,16 +111,21 @@ export default function TutorModal({ open, onClose, editingTutor }) {
         >
           <Input
             placeholder="Username"
-            disabled={!!editingTutor}
+            disabled={!!editingTeacher}
             size="large"
             maxLength={20}
           />
         </Form.Item>
 
-        {!editingTutor && (
+        {!editingTeacher && (
           <Form.Item
             name="password"
-            label="Parol"
+            label={
+              <span className="flex items-center gap-1">
+                <LockOutlined className="text-gray-500" />
+                Parol
+              </span>
+            }
             rules={[
               { required: true, message: "Parol kiritilishi shart!" },
               { min: 6, message: "Kamida 6 ta belgi" },
@@ -122,7 +142,12 @@ export default function TutorModal({ open, onClose, editingTutor }) {
 
         <Form.Item
           name="fullName"
-          label="F.I.O"
+          label={
+            <span className="flex items-center gap-1">
+              <UserOutlined className="text-gray-500" />
+              F.I.O
+            </span>
+          }
           rules={[
             { required: true, message: "F.I.O kiritilishi shart!" },
             { min: 2, message: "Kamida 2 ta belgi" },
@@ -138,7 +163,12 @@ export default function TutorModal({ open, onClose, editingTutor }) {
 
         <Form.Item
           name="phone"
-          label="Telefon raqam"
+          label={
+            <span className="flex items-center gap-1">
+              <PhoneOutlined className="text-gray-500" />
+              Telefon raqam
+            </span>
+          }
           rules={[{ validator: validatePhone }]}
         >
           <Input
@@ -147,7 +177,6 @@ export default function TutorModal({ open, onClose, editingTutor }) {
             maxLength={9}
             size="large"
             onChange={(e) => {
-              // Faqat raqamlarni qoldirish
               const value = e.target.value.replace(/\D/g, "");
               form.setFieldValue("phone", value);
             }}
@@ -156,7 +185,12 @@ export default function TutorModal({ open, onClose, editingTutor }) {
 
         <Form.Item
           name="email"
-          label="Email"
+          label={
+            <span className="flex items-center gap-1">
+              <MailOutlined className="text-gray-500" />
+              Email
+            </span>
+          }
           rules={[
             { type: "email", message: "Email formati noto'g'ri" },
             { max: 100, message: "Maksimal 100 ta belgi" },
@@ -177,7 +211,7 @@ export default function TutorModal({ open, onClose, editingTutor }) {
               size="large"
               className="bg-gradient-to-r from-green-500 to-emerald-600 border-0"
             >
-              {editingTutor ? "Yangilash" : "Qo'shish"}
+              {editingTeacher ? "Yangilash" : "Qo'shish"}
             </Button>
           </Space>
         </Form.Item>

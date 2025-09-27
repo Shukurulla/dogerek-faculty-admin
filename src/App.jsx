@@ -5,7 +5,7 @@ import PrivateRoute from "./components/PrivateRoute";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import Clubs from "./pages/Clubs";
-import Tutors from "./pages/Tutors";
+import Teachers from "./pages/Teachers";
 import Students from "./pages/Students";
 import Attendance from "./pages/Attendance";
 import Reports from "./pages/Reports";
@@ -22,7 +22,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Dashboard />} />
           <Route path="/clubs" element={<Clubs />} />
-          <Route path="/tutors" element={<Tutors />} />
+          <Route path="/teachers" element={<Teachers />} />
           <Route path="/students" element={<Students />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/reports" element={<Reports />} />

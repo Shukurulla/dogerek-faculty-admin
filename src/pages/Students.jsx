@@ -1,5 +1,4 @@
-// src/pages/Students.jsx - Fakultet admin uchun "Barcha fakultetlar" filtrini olib tashlash
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Table,
   Card,
@@ -11,6 +10,8 @@ import {
   Tabs,
   Badge,
   Tooltip,
+  Empty,
+  Spin,
 } from "antd";
 import {
   SearchOutlined,
@@ -19,8 +20,12 @@ import {
   GlobalOutlined,
   WarningOutlined,
   TeamOutlined,
+  LoadingOutlined,
 } from "@ant-design/icons";
-import { useGetFacultyStudentsQuery } from "../store/api/facultyApi";
+import {
+  useGetFacultyStudentsQuery,
+  useGetAllGroupsQuery,
+} from "../store/api/facultyApi";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const { Title, Text } = Typography;
@@ -32,15 +37,42 @@ export default function Students() {
     busy: null,
     search: "",
     page: 1,
-    limit: 10,
+    limit: 20,
   });
 
-  // OLIB TASHLANDI: showAllFaculties state
+  // Get groups data
+  const { data: groupsData } = useGetAllGroupsQuery();
+  const groups = groupsData?.data || [];
 
-  const { data, isLoading } = useGetFacultyStudentsQuery(filters);
+  // Get students data with filters - NULL VALUES FIXED
+  const queryParams = {
+    page: filters.page,
+    limit: filters.limit,
+  };
+
+  // Only add filters if they have actual values
+  if (filters.groupId) {
+    queryParams.groupId = filters.groupId;
+  }
+  if (filters.busy !== null) {
+    queryParams.busy = filters.busy;
+  }
+  if (filters.search) {
+    queryParams.search = filters.search;
+  }
+
+  const { data, isLoading, error, isFetching } =
+    useGetFacultyStudentsQuery(queryParams);
 
   const students = data?.data?.students || [];
   const pagination = data?.data?.pagination || {};
+
+  // Debug log
+  useEffect(() => {
+    console.log("Students data:", data);
+    console.log("Loading:", isLoading);
+    console.log("Error:", error);
+  }, [data, isLoading, error]);
 
   const columns = [
     {
@@ -69,23 +101,30 @@ export default function Students() {
       title: "Fakultet",
       dataIndex: ["department", "name"],
       key: "faculty",
-      render: (text) => (
-        <Tag color="blue" className="max-w-32 truncate">
-          {text}
-        </Tag>
-      ),
+      ellipsis: true,
+      render: (text) =>
+        text ? (
+          <Tooltip title={text}>
+            <Tag color="blue" className="max-w-32 truncate">
+              {text}
+            </Tag>
+          </Tooltip>
+        ) : (
+          <Tag>Noma'lum</Tag>
+        ),
     },
     {
       title: "Guruh",
       dataIndex: ["group", "name"],
       key: "group",
-      render: (text) => <Tag color="green">{text}</Tag>,
+      render: (text) =>
+        text ? <Tag color="green">{text}</Tag> : <Tag>Noma'lum</Tag>,
     },
     {
       title: "Kurs",
       dataIndex: ["level", "name"],
       key: "level",
-      render: (text) => <Tag>{text}</Tag>,
+      render: (text) => (text ? <Tag>{text}</Tag> : <Tag>Noma'lum</Tag>),
     },
     {
       title: "To'garaklar",
@@ -108,7 +147,7 @@ export default function Students() {
                 title={
                   <div>
                     {activeClubs.slice(2).map((club, index) => (
-                      <div key={index}>{club.club?.name}</div>
+                      <div key={index}>{club.club?.name || "To'garak"}</div>
                     ))}
                   </div>
                 }
@@ -152,18 +191,10 @@ export default function Students() {
     },
   ];
 
-  // Mock groups for now - keyinroq real API dan olinadi
-  const groups = [
-    { id: 1, name: "101-guruh" },
-    { id: 2, name: "102-guruh" },
-    { id: 3, name: "201-guruh" },
-    { id: 4, name: "301-guruh" },
-  ];
-
   const handleTabChange = (key) => {
     setFilters((prev) => ({
       ...prev,
-      busy: key === "all" ? null : key,
+      busy: key === "all" ? null : key === "busy" ? "true" : "false",
       page: 1,
     }));
   };
@@ -176,16 +207,57 @@ export default function Students() {
     }));
   };
 
-  if (isLoading) return <LoadingSpinner size="large" />;
+  const handleGroupChange = (value) => {
+    setFilters((prev) => ({
+      ...prev,
+      groupId: value,
+      page: 1,
+    }));
+  };
 
-  // Statistics
+  const handleTableChange = (newPagination) => {
+    setFilters((prev) => ({
+      ...prev,
+      page: newPagination.current,
+      limit: newPagination.pageSize,
+    }));
+  };
+
+  // Calculate statistics from current data
   const totalStudents = pagination.total || 0;
+  const currentPageStudents = students.length;
+
   const busyStudents = students.filter(
     (s) =>
       s.enrolledClubs?.filter((e) => e.status === "approved").length > 0 ||
       s.externalCourses?.length > 0
   ).length;
-  const notBusyStudents = totalStudents - busyStudents;
+
+  const notBusyStudents = currentPageStudents - busyStudents;
+
+  // Calculate percentages based on total
+  const busyPercentage =
+    totalStudents > 0
+      ? ((busyStudents / currentPageStudents) * 100).toFixed(1)
+      : "0";
+  const notBusyPercentage =
+    totalStudents > 0
+      ? ((notBusyStudents / currentPageStudents) * 100).toFixed(1)
+      : "0";
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center h-96">
+        <Card className="text-center">
+          <WarningOutlined className="text-4xl text-red-500 mb-4" />
+          <Title level={4}>Ma'lumotlarni yuklashda xatolik</Title>
+          <Text className="text-gray-500">
+            {error?.data?.message || error?.message || "Noma'lum xatolik"}
+          </Text>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -196,14 +268,16 @@ export default function Students() {
           </Title>
 
           <div className="flex gap-3 items-center">
-            {/* OLIB TASHLANDI: Barcha fakultetlar switch */}
-
             <Select
-              placeholder="Guruh"
-              style={{ width: 150 }}
+              placeholder="Guruhni tanlang"
+              style={{ width: 200 }}
               allowClear
-              onChange={(value) =>
-                setFilters((prev) => ({ ...prev, groupId: value }))
+              onChange={handleGroupChange}
+              value={filters.groupId}
+              loading={!groupsData}
+              showSearch
+              filterOption={(input, option) =>
+                option?.children?.toLowerCase().includes(input.toLowerCase())
               }
             >
               {groups.map((g) => (
@@ -219,10 +293,12 @@ export default function Students() {
               style={{ width: 250 }}
               onChange={(e) => handleSearch(e.target.value)}
               value={filters.search}
+              allowClear
             />
           </div>
         </div>
 
+        {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <Card
             className="border border-blue-200 bg-blue-50 cursor-pointer hover:shadow-md transition-shadow"
@@ -232,8 +308,15 @@ export default function Students() {
               <div>
                 <Text className="text-gray-600">Jami studentlar</Text>
                 <div className="text-2xl font-bold text-blue-600 mt-1">
-                  {totalStudents}
+                  {isLoading ? (
+                    <Spin indicator={<LoadingOutlined />} />
+                  ) : (
+                    totalStudents
+                  )}
                 </div>
+                <Text className="text-xs text-gray-500">
+                  Sahifada: {currentPageStudents} ta
+                </Text>
               </div>
               <TeamOutlined className="text-3xl text-blue-400" />
             </div>
@@ -241,18 +324,20 @@ export default function Students() {
 
           <Card
             className="border border-green-200 bg-green-50 cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => handleTabChange("true")}
+            onClick={() => handleTabChange("busy")}
           >
             <div className="flex items-center justify-between">
               <div>
                 <Text className="text-gray-600">Band studentlar</Text>
                 <div className="text-2xl font-bold text-green-600 mt-1">
-                  {busyStudents}
+                  {isLoading ? (
+                    <Spin indicator={<LoadingOutlined />} />
+                  ) : (
+                    busyStudents
+                  )}
                 </div>
                 <Text className="text-xs text-green-500">
-                  {totalStudents > 0
-                    ? `${((busyStudents / totalStudents) * 100).toFixed(1)}%`
-                    : "0%"}
+                  Sahifada: {busyPercentage}%
                 </Text>
               </div>
               <BookOutlined className="text-3xl text-green-400" />
@@ -261,18 +346,20 @@ export default function Students() {
 
           <Card
             className="border border-orange-200 bg-orange-50 cursor-pointer hover:shadow-md transition-shadow"
-            onClick={() => handleTabChange("false")}
+            onClick={() => handleTabChange("notBusy")}
           >
             <div className="flex items-center justify-between">
               <div>
                 <Text className="text-gray-600">Band bo'lmagan</Text>
                 <div className="text-2xl font-bold text-orange-600 mt-1">
-                  {notBusyStudents}
+                  {isLoading ? (
+                    <Spin indicator={<LoadingOutlined />} />
+                  ) : (
+                    notBusyStudents
+                  )}
                 </div>
                 <Text className="text-xs text-orange-500">
-                  {totalStudents > 0
-                    ? `${((notBusyStudents / totalStudents) * 100).toFixed(1)}%`
-                    : "0%"}
+                  Sahifada: {notBusyPercentage}%
                 </Text>
               </div>
               <WarningOutlined className="text-3xl text-orange-400" />
@@ -281,31 +368,69 @@ export default function Students() {
         </div>
 
         <Tabs
-          activeKey={filters.busy || "all"}
+          activeKey={
+            filters.busy === null
+              ? "all"
+              : filters.busy === "true"
+              ? "busy"
+              : "notBusy"
+          }
           onChange={handleTabChange}
           className="mb-4"
         >
           <TabPane tab={<span>Barcha studentlar</span>} key="all" />
-          <TabPane tab={<span>Band studentlar </span>} key="true" />
-          <TabPane tab={<span>Band bo'lmaganlar </span>} key="false" />
+          <TabPane tab={<span>Band studentlar</span>} key="busy" />
+          <TabPane tab={<span>Band bo'lmaganlar</span>} key="notBusy" />
         </Tabs>
 
-        <Table
-          columns={columns}
-          dataSource={students}
-          rowKey="_id"
-          scroll={{ x: 1000 }}
-          pagination={{
-            current: filters.page,
-            pageSize: filters.limit,
-            total: pagination.total,
-            showSizeChanger: true,
-            showTotal: (total) => `Jami: ${total} ta`,
-            onChange: (page, pageSize) =>
-              setFilters((prev) => ({ ...prev, page, limit: pageSize })),
-          }}
-          className="shadow-sm"
-        />
+        {isLoading && !students.length ? (
+          <LoadingSpinner size="large" />
+        ) : students.length > 0 ? (
+          <Table
+            columns={columns}
+            dataSource={students}
+            rowKey="_id"
+            scroll={{ x: 1200 }}
+            loading={isFetching}
+            pagination={{
+              current: filters.page,
+              pageSize: filters.limit,
+              total: pagination.total,
+              showSizeChanger: true,
+              showTotal: (total, range) =>
+                `${range[0]}-${range[1]} dan ${total} ta ko'rsatilmoqda`,
+              pageSizeOptions: ["10", "20", "50", "100"],
+            }}
+            onChange={handleTableChange}
+            className="shadow-sm"
+          />
+        ) : (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description={
+              <div>
+                <div className="text-lg font-medium mb-1">
+                  Studentlar topilmadi
+                </div>
+                {filters.search && (
+                  <Text className="text-gray-500">
+                    "{filters.search}" bo'yicha natija yo'q
+                  </Text>
+                )}
+                {filters.groupId && (
+                  <Text className="text-gray-500 block">
+                    Tanlangan guruhda studentlar yo'q
+                  </Text>
+                )}
+                {filters.busy !== null && (
+                  <Text className="text-gray-500 block">
+                    Bu kategoriyada studentlar yo'q
+                  </Text>
+                )}
+              </div>
+            }
+          />
+        )}
       </Card>
     </div>
   );
