@@ -9,6 +9,7 @@ import {
   FileTextOutlined,
   SettingOutlined,
 } from "@ant-design/icons";
+import { logo } from "../../public";
 
 const { Sider } = Layout;
 const menuItems = [
@@ -69,7 +70,14 @@ export default function Sidebar({ collapsed }) {
             collapsed ? "text-xl" : "text-2xl"
           }`}
         >
-          {collapsed ? "FA" : "Fakultet Admin"}
+          {collapsed ? (
+            "FA"
+          ) : (
+            <div className="flex items-center justify-start gap-2">
+              <img src={logo} className="w-[50px] " alt="" />
+              <p>Fakultet Admin</p>
+            </div>
+          )}
         </h1>
       </div>
 
